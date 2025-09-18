@@ -1,0 +1,16 @@
+# Redirects para SPA (Single Page Application)
+/*    /index.html   200
+
+# Headers adicionales para seguridad
+/*
+  X-Frame-Options: DENY
+  X-XSS-Protection: 1; mode=block
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# Cache para archivos estáticos
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Configuración específica para la aplicación
+/parte-diario-trabajo/*  /index.html  200
