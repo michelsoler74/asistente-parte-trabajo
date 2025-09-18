@@ -1,0 +1,42 @@
+{
+  "name": "parte-diario-trabajo",
+  "version": "1.0.0",
+  "description": "Asistente personal completo para gestión de partes diarios de trabajo con dictado por voz y guardado automático",
+  "main": "index.html",
+  "scripts": {
+    "dev": "npx serve .",
+    "build": "echo 'Static project - no build needed'",
+    "preview": "npx serve .",
+    "deploy": "gh-pages -d ."
+  },
+  "keywords": [
+    "parte-diario",
+    "trabajo",
+    "dictado-voz",
+    "construccion",
+    "mantenimiento",
+    "react",
+    "javascript",
+    "speech-recognition",
+    "web-app"
+  ],
+  "author": "Michel Soler",
+  "license": "MIT",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "lucide-react": "^0.263.1"
+  },
+  "devDependencies": {
+    "serve": "^14.2.0",
+    "gh-pages": "^5.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michelsoler74/parte-diario-trabajo.git"
+  },
+  "bugs": {
+    "url": "https://github.com/michelsoler74/parte-diario-trabajo/issues"
+  },
+  "homepage": "https://michelsoler74.github.io/parte-diario-trabajo"
+}
