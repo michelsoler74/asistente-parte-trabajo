@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📋 Asistente Personal - Parte Diario de Trabajo</title>
+    <meta name="description" content="Asistente personal completo para gestión de partes diarios de trabajo con dictado por voz y guardado automático">
+    <meta name="keywords" content="parte diario, trabajo, dictado voz, construcción, mantenimiento">
+    <meta name="author" content="Michel Soler">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="90" font-size="90">📋</text></svg>">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React y ReactDOM - Versiones específicas -->
+    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.development.js"></script>
+
+    <!-- Babel para transformar JSX - Cargar antes que Lucide -->
+    <script src="https://unpkg.com/@babel/standalone@7.23.4/babel.min.js"></script>
+
+    <!-- Lucide Icons - Versión standalone -->
+    <script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.js"></script>
+    
+    <style>
+        /* Animaciones personalizadas */
+        @keyframes pulse-custom {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .animate-pulse-custom {
+            animation: pulse-custom 1s ease-in-out infinite;
+        }
+        
+        /* Estilos para el scroll personalizado */
+        .custom-scroll::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #a1a1a1;
+        }
+        
+        /* Mejoras para pantallas pequeñas */
+        @media (max-width: 640px) {
+            .container-mobile {
+                padding: 1rem;
+            }
+        }
+        
+        /* Estilos para el dictado por voz */
+        .voice-active {
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+            animation: pulse-custom 1s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div id="root" class="min-h-screen">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="text-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p class="text-gray-600">Cargando Asistente Personal...</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/babel">
+        // Aquí va el código React del componente ParteDiarioTrabajo
+        // NOTA: Copia aquí el código completo del componente React desde el artefact
+        
+        const { useState, useRef, useEffect } = React;
+
+        // Verificar si Lucide está disponible y usar iconos básicos como fallback
+        const icons = window.lucide || {};
+        const FileText = icons.FileText || (() => React.createElement('span', null, '📄'));
+        const Calendar = icons.Calendar || (() => React.createElement('span', null, '📅'));
+        const Users = icons.Users || (() => React.createElement('span', null, '👥'));
+        const Package = icons.Package || (() => React.createElement('span', null, '📦'));
+        const AlertTriangle = icons.AlertTriangle || (() => React.createElement('span', null, '⚠️'));
+        const Clock = icons.Clock || (() => React.createElement('span', null, '⏰'));
+        const Camera = icons.Camera || (() => React.createElement('span', null, '📷'));
+        const Brain = icons.Brain || (() => React.createElement('span', null, '🧠'));
+        const Mic = icons.Mic || (() => React.createElement('span', null, '🎤'));
+        const MicOff = icons.MicOff || (() => React.createElement('span', null, '🔇'));
+
+        const ParteDiarioTrabajo = () => {
+  const [currentStep, setCurrentStep] = useState(0);
+  const [isListening, setIsListening] = useState(false);
+  const [currentField, setCurrentField] = useState('');
+  const [saveStatus, setSaveStatus] = useState('saved'); // 'saved', 'saving', 'error'
+  const [showHistory, setShowHistory] = useState(false);
+  const [showMemoryManager, setShowMemoryManager] = useState(false);
+  const [memoryInfo, setMemoryInfo] = useState({ used: 0, available: 0, percentage: 0 });
+  const [maxPartesLimit, setMaxPartesLimit] = useState(50);
+  const [currentParteId, setCurrentParteId] = useState(null);
+  const [partesHistory, setPartesHistory] = useState([]);
+  const recognitionRef = useRef(null);
+  const saveTimeoutRef = useRef(null);
+
+  const [formData, setFormData] = useState({
+    nombreTrabajo: '',
+    fecha: new Date().toISOString().split('T')[0],
+    trabajosRealizados: '',
+    operarios: [{ nombre: '', horas: '' }],
+    materialesUtilizados: '',
+    incidencias: '',
+    observaciones: '',
+    tareasPendientes: '',
+    imagenes: [],
+    resumenInteligente: ''
+  });
+
+  // Cargar datos guardados al inicializar
+  useEffect(() => {
+    loadSavedData();
+    loadHistoryData();
+    updateMemoryInfo();
+    loadSettings();
+  }, []);
+
+  // Actualizar info de memoria cuando cambia el historial
+  useEffect(() => {
+    updateMemoryInfo();
+  }, [partesHistory]);
+
+  const loadSettings = () => {
+    const savedLimit = localStorage.getItem('partes_limit');
+    if (savedLimit) {
+      setMaxPartesLimit(parseInt(savedLimit));
+    }
+  };
+
+  const updateMemoryInfo = () => {
+    try {
+      // Calcular uso aproximado de localStorage
+      let totalUsed = 0;
+      for (let key in localStorage) {
+        if (localStorage.hasOwnProperty(key)) {
+          totalUsed += localStorage[key].length + key.length;
+        }
+      }
+
+      // Estimación: 5MB disponibles (conservador)
+      const availableSpace = 5 * 1024 * 1024; // 5MB en bytes
+      const usedMB = (totalUsed / 1024 / 1024).toFixed(2);
+      const availableMB = (availableSpace / 1024 / 1024).toFixed(2);
+      const percentage = Math.min((totalUsed / availableSpace) * 100, 100);
+
+      setMemoryInfo({
+        used: usedMB,
+        available: availableMB,
+        percentage: percentage.toFixed(1)
+      });
+
+      // Alerta si se está llenando
+      if (percentage > 80) {
+        console.warn('Memoria del navegador casi llena:', percentage + '%');
+      }
+
+    } catch (error) {
+      console.error('Error calculando memoria:', error);
+    }
+  };
+
+  const cleanOldPartes = (keepCount = maxPartesLimit) => {
+    try {
+      if (partesHistory.length > keepCount) {
+        const sortedHistory = [...partesHistory].sort((a, b) =>
+          new Date(b.fechaCreacion) - new Date(a.fechaCreacion)
+        );
+        const partsToKeep = sortedHistory.slice(0, keepCount);
+
+        setPartesHistory(partsToKeep);
+        localStorage.setItem('partes_diarios_history', JSON.stringify(partsToKeep));
+        updateMemoryInfo();
+
+        return sortedHistory.length - partsToKeep.length; // Cantidad eliminada
+      }
+      return 0;
+    } catch (error) {
+      console.error('Error limpiando partes antiguos:', error);
+      return 0;
+    }
+  };
+
+  const deletePartesByDateRange = (startDate, endDate) => {
+    try {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999); // Incluir todo el día final
+
+      const filteredHistory = partesHistory.filter(parte => {
+        const parteDate = new Date(parte.fecha);
+        return !(parteDate >= start && parteDate <= end);
+      });
+
+      const deletedCount = partesHistory.length - filteredHistory.length;
+      setPartesHistory(filteredHistory);
+      localStorage.setItem('partes_diarios_history', JSON.stringify(filteredHistory));
+      updateMemoryInfo();
+
+      return deletedCount;
+    } catch (error) {
+      console.error('Error eliminando por rango de fechas:', error);
+      return 0;
+    }
+  };
+
+  const clearAllHistory = () => {
+    if (confirm('⚠️ ¿Estás seguro de eliminar TODO el historial?\\n\\nEsta acción no se puede deshacer.')) {
+      if (confirm('🔄 ¿Quieres exportar el historial antes de eliminarlo?')) {
+        exportHistoryToCSV();
+        setTimeout(() => {
+          setPartesHistory([]);
+          localStorage.removeItem('partes_diarios_history');
+          updateMemoryInfo();
+          alert('✅ Historial eliminado después de exportar');
+        }, 1000);
+      } else {
+        setPartesHistory([]);
+        localStorage.removeItem('partes_diarios_history');
+        updateMemoryInfo();
+        alert('✅ Historial eliminado completamente');
+      }
+    }
+  };
+
+  const saveSettings = (newLimit) => {
+    setMaxPartesLimit(newLimit);
+    localStorage.setItem('partes_limit', newLimit.toString());
+
+    // Aplicar nuevo límite inmediatamente
+    if (partesHistory.length > newLimit) {
+      const eliminated = cleanOldPartes(newLimit);
+      if (eliminated > 0) {
+        alert(`⚙️ Configuración guardada. Se eliminaron ${eliminated} partes antiguos para ajustarse al nuevo límite.`);
+      }
+    }
+  };
+
+  const MemoryIndicator = () => {
+    const getColor = () => {
+      if (memoryInfo.percentage < 50) return 'bg-green-500';
+      if (memoryInfo.percentage < 80) return 'bg-yellow-500';
+      return 'bg-red-500';
+    };
+
+    return (
+      <div className="flex items-center gap-2 text-sm">
+        <span>💾</span>
+        <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div
+            className={`h-full ${getColor()} transition-all duration-300`}
+            style={{ width: `${memoryInfo.percentage}%` }}
+          />
+        </div>
+        <span className="text-xs text-gray-600">
+          {memoryInfo.used}MB
+        </span>
+      </div>
+    );
+  };
+
+  // Guardado automático cuando cambian los datos
+  useEffect(() => {
+    if (currentParteId) {
+      autoSave();
+    }
+  }, [formData]);
+
+  const loadSavedData = () => {
+    try {
+      const savedData = localStorage.getItem('parte_diario_current');
+      const savedId = localStorage.getItem('parte_diario_current_id');
+
+      if (savedData) {
+        const parsedData = JSON.parse(savedData);
+        setFormData(parsedData);
+        setSaveStatus('saved');
+      }
+
+      if (savedId) {
+        setCurrentParteId(savedId);
+      } else {
+        // Crear nuevo ID si no existe
+        const newId = 'parte_' + Date.now();
+        setCurrentParteId(newId);
+        localStorage.setItem('parte_diario_current_id', newId);
+      }
+    } catch (error) {
+      console.error('Error cargando datos:', error);
+      setSaveStatus('error');
+    }
+  };
+
+  const loadHistoryData = () => {
+    try {
+      const history = localStorage.getItem('partes_diarios_history');
+      if (history) {
+        setPartesHistory(JSON.parse(history));
+      }
+    } catch (error) {
+      console.error('Error cargando historial:', error);
+    }
+  };
+
+  const autoSave = () => {
+    setSaveStatus('saving');
+
+    // Cancelar guardado anterior si existe
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Guardar después de 2 segundos de inactividad
+    saveTimeoutRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem('parte_diario_current', JSON.stringify(formData));
+        setSaveStatus('saved');
+      } catch (error) {
+        console.error('Error guardando:', error);
+        setSaveStatus('error');
+      }
+    }, 2000);
+  };
+
+  const saveToHistory = () => {
+    try {
+      const parteCompleto = {
+        id: currentParteId,
+        ...formData,
+        fechaCreacion: new Date().toISOString(),
+        ultimaModificacion: new Date().toISOString(),
+        completado: true
+      };
+
+      const updatedHistory = [...partesHistory];
+      const existingIndex = updatedHistory.findIndex(p => p.id === currentParteId);
+
+      if (existingIndex >= 0) {
+        updatedHistory[existingIndex] = parteCompleto;
+      } else {
+        updatedHistory.unshift(parteCompleto);
+      }
+
+      // Aplicar límite automático
+      if (updatedHistory.length > maxPartesLimit) {
+        updatedHistory.splice(maxPartesLimit);
+      }
+
+      setPartesHistory(updatedHistory);
+      localStorage.setItem('partes_diarios_history', JSON.stringify(updatedHistory));
+      updateMemoryInfo();
+
+      // Crear nuevo parte para continuar
+      createNewParte();
+
+      return true;
+    } catch (error) {
+      console.error('Error guardando en historial:', error);
+
+      // Si hay error de espacio, intentar limpiar automáticamente
+      if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
+        alert('⚠️ Memoria llena. Limpiando partes antiguos automáticamente...');
+        const eliminated = cleanOldPartes(Math.floor(maxPartesLimit / 2));
+        if (eliminated > 0) {
+          alert(`🧹 Se eliminaron ${eliminated} partes antiguos. Intenta guardar de nuevo.`);
+        }
+      }
+      return false;
+    }
+  };
+
+  const createNewParte = () => {
+    const newId = 'parte_' + Date.now();
+    setCurrentParteId(newId);
+    localStorage.setItem('parte_diario_current_id', newId);
+
+    // Resetear formulario pero mantener algunos datos comunes
+    const newFormData = {
+      nombreTrabajo: '',
+      fecha: new Date().toISOString().split('T')[0],
+      trabajosRealizados: '',
+      operarios: [{ nombre: '', horas: '' }],
+      materialesUtilizados: '',
+      incidencias: '',
+      observaciones: '',
+      tareasPendientes: '',
+      imagenes: [],
+      resumenInteligente: ''
+    };
+
+    setFormData(newFormData);
+    setCurrentStep(0);
+    localStorage.removeItem('parte_diario_current');
+  };
+
+  const loadParteFromHistory = (parte) => {
+    setCurrentParteId(parte.id);
+    setFormData({
+      nombreTrabajo: parte.nombreTrabajo,
+      fecha: parte.fecha,
+      trabajosRealizados: parte.trabajosRealizados,
+      operarios: parte.operarios,
+      materialesUtilizados: parte.materialesUtilizados,
+      incidencias: parte.incidencias,
+      observaciones: parte.observaciones,
+      tareasPendientes: parte.tareasPendientes,
+      imagenes: parte.imagenes || [],
+      resumenInteligente: parte.resumenInteligente
+    });
+    localStorage.setItem('parte_diario_current_id', parte.id);
+    setShowHistory(false);
+    setCurrentStep(0);
+  };
+
+  const deleteParteFromHistory = (parteId) => {
+    const updatedHistory = partesHistory.filter(p => p.id !== parteId);
+    setPartesHistory(updatedHistory);
+    localStorage.setItem('partes_diarios_history', JSON.stringify(updatedHistory));
+  };
+
+  const createTemplateFromParte = (parte) => {
+    const template = {
+      nombreTrabajo: parte.nombreTrabajo,
+      fecha: new Date().toISOString().split('T')[0],
+      trabajosRealizados: '',
+      operarios: parte.operarios.map(op => ({ ...op, horas: '' })),
+      materialesUtilizados: parte.materialesUtilizados,
+      incidencias: '',
+      observaciones: '',
+      tareasPendientes: '',
+      imagenes: [],
+      resumenInteligente: ''
+    };
+
+    setFormData(template);
+    setShowHistory(false);
+    setCurrentStep(0);
+    createNewParte();
+  };
+
+  const exportHistoryToCSV = () => {
+    const csvData = [
+      ['ID', 'Nombre Trabajo', 'Fecha', 'Total Horas', 'Operarios', 'Fecha Creación', 'Tiene Incidencias'],
+      ...partesHistory.map(parte => [
+        parte.id,
+        parte.nombreTrabajo,
+        parte.fecha,
+        parte.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0),
+        parte.operarios.length,
+        new Date(parte.fechaCreacion).toLocaleDateString('es-ES'),
+        parte.incidencias ? 'Sí' : 'No'
+      ])
+    ];
+
+    const csvContent = csvData.map(row => row.join(',')).join('\\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Historial_Partes_Diarios_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const SaveStatusIndicator = () => {
+    const getStatusInfo = () => {
+      switch (saveStatus) {
+        case 'saving':
+          return { text: 'Guardando...', color: 'text-yellow-600', icon: '⏳' };
+        case 'saved':
+          return { text: 'Guardado', color: 'text-green-600', icon: '✅' };
+        case 'error':
+          return { text: 'Error al guardar', color: 'text-red-600', icon: '❌' };
+        default:
+          return { text: 'Sin guardar', color: 'text-gray-600', icon: '⚪' };
+      }
+    };
+
+    const status = getStatusInfo();
+    return (
+      <div className={`flex items-center gap-1 text-sm ${status.color}`}>
+        <span>{status.icon}</span>
+        <span>{status.text}</span>
+      </div>
+    );
+  };
+
+  // Inicializar reconocimiento de voz
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = 'es-ES';
+
+      recognitionRef.current.onresult = (event) => {
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        if (finalTranscript) {
+          handleVoiceInput(currentField, finalTranscript.trim());
+        }
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+        setCurrentField('');
+      };
+
+      recognitionRef.current.onerror = (event) => {
+        console.error('Error de reconocimiento de voz:', event.error);
+        setIsListening(false);
+        setCurrentField('');
+      };
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
+
+  const startVoiceRecognition = (fieldName) => {
+    if (recognitionRef.current && !isListening) {
+      setCurrentField(fieldName);
+      setIsListening(true);
+      recognitionRef.current.start();
+    }
+  };
+
+  const stopVoiceRecognition = () => {
+    if (recognitionRef.current && isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      setCurrentField('');
+    }
+  };
+
+  const handleVoiceInput = (fieldName, transcript) => {
+    if (fieldName.includes('operario-')) {
+      const [, index, field] = fieldName.split('-');
+      const operarioIndex = parseInt(index);
+      updateOperario(operarioIndex, field, formData.operarios[operarioIndex][field] + ' ' + transcript);
+    } else {
+      const currentValue = formData[fieldName] || '';
+      handleInputChange(fieldName, currentValue + ' ' + transcript);
+    }
+  };
+
+  const VoiceButton = ({ fieldName, isActive = false }) => {
+    const isCurrentlyListening = isListening && currentField === fieldName;
+
+    return (
+      <button
+        type="button"
+        onClick={() => isCurrentlyListening ? stopVoiceRecognition() : startVoiceRecognition(fieldName)}
+        className={`p-2 rounded-lg transition-all duration-200 ${
+          isCurrentlyListening
+            ? 'bg-red-500 text-white animate-pulse'
+            : 'bg-blue-500 text-white hover:bg-blue-600'
+        }`}
+        title={isCurrentlyListening ? 'Detener dictado' : 'Iniciar dictado por voz'}
+      >
+        {isCurrentlyListening ? <MicOff size={16} /> : <Mic size={16} />}
+      </button>
+    );
+  };
+
+  const steps = [
+    { title: 'Información General', icon: FileText },
+    { title: 'Trabajos Realizados', icon: FileText },
+    { title: 'Operarios y Horas', icon: Users },
+    { title: 'Materiales', icon: Package },
+    { title: 'Incidencias', icon: AlertTriangle },
+    { title: 'Observaciones', icon: FileText },
+    { title: 'Tareas Pendientes', icon: Clock },
+    { title: 'Imágenes', icon: Camera },
+    { title: 'Resumen Final', icon: Brain }
+  ];
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const addOperario = () => {
+    setFormData(prev => ({
+      ...prev,
+      operarios: [...prev.operarios, { nombre: '', horas: '' }]
+    }));
+  };
+
+  const updateOperario = (index, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      operarios: prev.operarios.map((op, i) =>
+        i === index ? { ...op, [field]: value } : op
+      )
+    }));
+  };
+
+  const removeOperario = (index) => {
+    if (formData.operarios.length > 1) {
+      setFormData(prev => ({
+        ...prev,
+        operarios: prev.operarios.filter((_, i) => i !== index)
+      }));
+    }
+  };
+
+  const generateResumen = () => {
+    const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
+    const resumen = `
+📋 RESUMEN DEL PARTE DIARIO
+
+🏗️ Trabajo: ${formData.nombreTrabajo}
+📅 Fecha: ${formData.fecha}
+
+👷‍♂️ Personal:
+${formData.operarios.map(op => `• ${op.nombre}: ${op.horas} horas`).join('\\n')}
+⏱️ Total horas trabajadas: ${totalHoras}h
+
+🔧 Actividades principales:
+${formData.trabajosRealizados}
+
+📦 Materiales empleados:
+${formData.materialesUtilizados}
+
+${formData.incidencias ? `⚠️ Incidencias:\\n${formData.incidencias}` : '✅ Sin incidencias reportadas'}
+
+${formData.tareasPendientes ? `📋 Pendiente para mañana:\\n${formData.tareasPendientes}` : ''}
+
+${formData.observaciones ? `💡 Observaciones:\\n${formData.observaciones}` : ''}
+    `.trim();
+
+    handleInputChange('resumenInteligente', resumen);
+  };
+
+  const nextStep = () => {
+    if (currentStep === 7) { // Antes del resumen
+      generateResumen();
+    }
+    if (currentStep === 8) { // Al finalizar
+      if (saveToHistory()) {
+        alert('✅ Parte diario guardado en el historial correctamente');
+      } else {
+        alert('❌ Error al guardar en el historial');
+      }
+      return;
+    }
+    if (currentStep < steps.length - 1) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const exportToPDF = () => {
+    const content = `
+PARTE DIARIO DE TRABAJO
+
+═══════════════════════════════════════════════════════
+
+📋 INFORMACIÓN GENERAL
+────────────────────────────────────────────────────────
+Trabajo: ${formData.nombreTrabajo}
+Fecha: ${formData.fecha}
+
+👷‍♂️ PERSONAL Y HORAS
+────────────────────────────────────────────────────────
+${formData.operarios.map(op => `• ${op.nombre}: ${op.horas} horas`).join('\\n')}
+Total horas trabajadas: ${formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0)}h
+
+🔧 TRABAJOS REALIZADOS
+────────────────────────────────────────────────────────
+${formData.trabajosRealizados}
+
+📦 MATERIALES UTILIZADOS
+────────────────────────────────────────────────────────
+${formData.materialesUtilizados}
+
+${formData.incidencias ? `⚠️  INCIDENCIAS\\n────────────────────────────────────────────────────────\\n${formData.incidencias}\\n\\n` : ''}${formData.observaciones ? `💡 OBSERVACIONES\\n────────────────────────────────────────────────────────\\n${formData.observaciones}\\n\\n` : ''}${formData.tareasPendientes ? `📋 TAREAS PENDIENTES PARA MAÑANA\\n────────────────────────────────────────────────────────\\n${formData.tareasPendientes}\\n\\n` : ''}📊 RESUMEN EJECUTIVO
+────────────────────────────────────────────────────────
+${formData.resumenInteligente}
+
+═══════════════════════════════════════════════════════
+Generado el ${new Date().toLocaleString('es-ES')}
+    `.trim();
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Parte_Diario_${formData.fecha}_${formData.nombreTrabajo.replace(/[^a-zA-Z0-9]/g, '_')}.pdf.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const exportToCSV = () => {
+    const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
+
+    // Crear datos estructurados para CSV
+    const csvData = [
+      ['INFORMACIÓN GENERAL'],
+      ['Campo', 'Valor'],
+      ['Nombre del Trabajo', formData.nombreTrabajo],
+      ['Fecha', formData.fecha],
+      ['Total Horas Trabajadas', totalHoras],
+      ['Número de Operarios', formData.operarios.length],
+      [''],
+      ['PERSONAL'],
+      ['Nombre', 'Horas'],
+      ...formData.operarios.map(op => [op.nombre, op.horas]),
+      [''],
+      ['DESCRIPCIÓN DE TRABAJOS'],
+      ['Trabajos Realizados', `"${formData.trabajosRealizados.replace(/"/g, '""')}"`],
+      [''],
+      ['MATERIALES'],
+      ['Materiales Utilizados', `"${formData.materialesUtilizados.replace(/"/g, '""')}"`],
+      [''],
+      ['INCIDENCIAS Y OBSERVACIONES'],
+      ['Incidencias', `"${formData.incidencias.replace(/"/g, '""')}"`],
+      ['Observaciones', `"${formData.observaciones.replace(/"/g, '""')}"`],
+      [''],
+      ['PLANIFICACIÓN'],
+      ['Tareas Pendientes', `"${formData.tareasPendientes.replace(/"/g, '""')}"`],
+      [''],
+      ['RESUMEN'],
+      ['Resumen Inteligente', `"${formData.resumenInteligente.replace(/"/g, '""')}"`],
+      [''],
+      ['METADATOS'],
+      ['Generado el', new Date().toLocaleString('es-ES')]
+    ];
+
+    // Convertir a formato CSV
+    const csvContent = csvData.map(row => row.join(',')).join('\\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Parte_Diario_${formData.fecha}_${formData.nombreTrabajo.replace(/[^a-zA-Z0-9]/g, '_')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const renderStep = () => {
+    switch (currentStep) {
+      case 0: // Información General
+        return (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-blue-700 mb-4">Información General del Trabajo</h3>
+            <div>
+              <label className="block text-sm font-medium mb-2">¿Cuál es el nombre del trabajo o proyecto?</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={formData.nombreTrabajo}
+                  onChange={(e) => handleInputChange('nombreTrabajo', e.target.value)}
+                  className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ej: Construcción edificio residencial, Reparación maquinaria..."
+                />
+                <VoiceButton fieldName="nombreTrabajo" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">Fecha del trabajo</label>
+              <input
+                type="date"
+                value={formData.fecha}
+                onChange={(e) => handleInputChange('fecha', e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        );
+
+      case 1: // Trabajos Realizados
+        return (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-blue-700 mb-4">Trabajos Realizados</h3>
+            <div>
+              <label className="block text-sm font-medium mb-2">Describe detalladamente los trabajos realizados hoy</label>
+              <div className="flex gap-2">
+                <textarea
+                  value={formData.trabajosRealizados}
+                  onChange={(e) => handleInputChange('trabajosRealizados', e.target.value)}
+                  rows={6}
+                  className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ej: \\n- Excavación de zanjas para cimientos\\n- Instalación de tuberías de agua\\n- Hormigonado de la base..."
+                />
+                <div className="flex flex-col">
+                  <VoiceButton fieldName="trabajosRealizados" />
+                </div>
+              </div>
+              {isListening && currentField === 'trabajosRealizados' && (
+                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-700">🎤 Dictando... Habla claramente y haz pausas entre ideas</p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 2: // Operarios y Horas
+        return (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-blue-700 mb-4">Operarios y Horas Trabajadas</h3>
+            {formData.operarios.map((operario, index) => (
+              <div key={index} className="flex gap-3 items-end">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium mb-2">Nombre del operario</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={operario.nombre}
+                      onChange={(e) => updateOperario(index, 'nombre', e.target.value)}
+                      className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Nombre completo"
+                    />
+                    <VoiceButton fieldName={`operario-${index}-nombre`} />
+                  </div>
+                </div>
+                <div className="w-24">
+                  <label className="block text-sm font-medium mb-2">Horas</label>
+                  <input
+                    type="number"
+                    value={operario.horas}
+                    onChange={(e) => updateOperario(index, 'horas', e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="8"
+                    step="0.5"
+                  />
+                </div>
+                {formData.operarios.length > 1 && (
+                  <button
+                    onClick={() => removeOperario(index)}
+                    className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              onClick={addOperario}
+              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+            >
+              + Añadir Operario
+            </button>
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <strong>Total horas: {formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0)} horas</strong>
+            </div>
+            {isListening && currentField.includes('operario-') && (
+              <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-700">🎤 Dictando nombre del operario... Di el nombre completo</p>
+              </div>
+            )}
+          </div>
+        );
+
+      case 3: // Materiales
+        return (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-blue-700 mb-4">Materiales Utilizados</h3>
+            <div>
+              <label className="block text-sm font-medium mb-2">Lista todos los materiales utilizados con cantidades</label>
+              <div className="flex gap-2">
+                <textarea
+                  value={formData.materialesUtilizados}
+                  onChange={(e) => handleInputChange('materialesUtilizados', e.target.value)}
+                  rows={6}
+                  className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ej:\\n- Cemento: 10 sacos de 50kg\\n- Arena: 2 m³\\n- Grava: 3 m³\\n- Tubos PVC: 20 metros de Ø110mm\\n- Tornillería varia..."
+                />
+                <div className="flex flex-col">
+                  <VoiceButton fieldName="materialesUtilizados" />
+                </div>
+              </div>
+              {isListening && currentField === 'materialesUtilizados' && (
+                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-700">🎤 Dictando materiales... Di el material y la cantidad</p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 4: // Incidencias
+        return (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-blue-700 mb-4">Incidencias</h3>
+            <div>
+              <label className="block text-sm font-medium mb-2">¿Ha habido alguna incidencia, problema o imprevisto?</label>
+              <div className="flex gap-2">
+                <textarea
+                  value={formData.incidencias}
+                  onChange={(e) => handleInputChange('incidencias', e.target.value)}
+                  rows={4}
+                  className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Describe cualquier problema, retraso, accidente menor, falta de material, condiciones climáticas adversas, etc. Si no hubo incidencias, déjalo vacío."
+                />
+                <div className="flex flex-col">
+                  <VoiceButton fieldName="incidencias" />
+                </div>
+              </div>
+              {isListening && currentField === 'incidencias' && (
+                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-700">🎤 Dictando incidencias... Describe cualquier problema</p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 5: // Observaciones
+        return (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-blue-700 mb-4">Observaciones Generales</h3>
+            <div>
+              <label className="block text-sm font-medium mb-2">Observaciones adicionales, comentarios o notas importantes</label>
+              <div className="flex gap-2">
+                <textarea
+                  value={formData.observaciones}
+                  onChange={(e) => handleInputChange('observaciones', e.target.value)}
+                  rows={4}
+                  className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Cualquier observación sobre calidad del trabajo, eficiencia del equipo, sugerencias de mejora, etc."
+                />
+                <div className="flex flex-col">
+                  <VoiceButton fieldName="observaciones" />
+                </div>
+              </div>
+              {isListening && currentField === 'observaciones' && (
+                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-700">🎤 Dictando observaciones... Comenta lo que consideres importante</p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 6: // Tareas Pendientes
+        return (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-blue-700 mb-4">Tareas Pendientes para Mañana</h3>
+            <div>
+              <label className="block text-sm font-medium mb-2">¿Qué trabajos están programados para el próximo día laboral?</label>
+              <div className="flex gap-2">
+                <textarea
+                  value={formData.tareasPendientes}
+                  onChange={(e) => handleInputChange('tareasPendientes', e.target.value)}
+                  rows={5}
+                  className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ej:\\n- Continuar con el hormigonado\\n- Recepción de materiales a las 8:00\\n- Inspección técnica a las 10:00\\n- Montaje de estructura metálica..."
+                />
+                <div className="flex flex-col">
+                  <VoiceButton fieldName="tareasPendientes" />
+                </div>
+              </div>
+              {isListening && currentField === 'tareasPendientes' && (
+                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-700">🎤 Dictando tareas pendientes... Enumera las actividades de mañana</p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 7: // Imágenes
+        return (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-blue-700 mb-4">Imágenes del Trabajo</h3>
+            <div>
+              <label className="block text-sm font-medium mb-2">Sube fotos del progreso, materiales o incidencias</label>
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files);
+                  handleInputChange('imagenes', files);
+                }}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+              {formData.imagenes.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-sm text-gray-600">
+                    {formData.imagenes.length} imagen(es) seleccionada(s)
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 8: // Resumen
+        return (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-blue-700 mb-4">Resumen Inteligente</h3>
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <pre className="whitespace-pre-wrap text-sm">{formData.resumenInteligente}</pre>
+            </div>
+
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h4 className="font-semibold text-blue-800 mb-3">📊 Estadísticas del Parte</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="text-center">
+                  <div className="font-bold text-lg text-blue-600">
+                    {formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0)}h
+                  </div>
+                  <div className="text-gray-600">Horas Totales</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-bold text-lg text-green-600">{formData.operarios.length}</div>
+                  <div className="text-gray-600">Operarios</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-bold text-lg text-orange-600">
+                    {formData.incidencias ? '⚠️' : '✅'}
+                  </div>
+                  <div className="text-gray-600">
+                    {formData.incidencias ? 'Con Incidencias' : 'Sin Incidencias'}
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div className="font-bold text-lg text-purple-600">{formData.imagenes.length}</div>
+                  <div className="text-gray-600">Imágenes</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={exportToPDF}
+                className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center justify-center gap-2"
+              >
+                📄 Descargar PDF
+              </button>
+              <button
+                onClick={exportToCSV}
+                className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center justify-center gap-2"
+              >
+                📊 Descargar CSV
+              </button>
+            </div>
+
+            <div className="bg-yellow-50 p-3 rounded-lg">
+              <p className="text-sm text-yellow-700">
+                💡 <strong>Consejo:</strong> El archivo PDF es ideal para imprimir o enviar por email.
+                El CSV es perfecto para análisis de datos en Excel o sistemas de gestión.
+              </p>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto p-6 bg-white">
+      <div className="mb-8">
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">📋 Asistente Personal</h1>
+            <h2 className="text-xl text-gray-600">Parte Diario de Trabajo</h2>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <MemoryIndicator />
+            <SaveStatusIndicator />
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowMemoryManager(true)}
+                className={`px-3 py-1 rounded-lg text-sm ${
+                  memoryInfo.percentage > 70
+                    ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+                title="Gestionar memoria y limpieza"
+              >
+                🧹 Limpiar
+              </button>
+              <button
+                onClick={() => setShowHistory(true)}
+                className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm"
+              >
+                📚 Historial ({partesHistory.length})
+              </button>
+              <button
+                onClick={createNewParte}
+                className="px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm"
+              >
+                ➕ Nuevo Parte
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="mb-8">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm font-medium text-gray-600">
+            Paso {currentStep + 1} de {steps.length}
+          </span>
+          <span className="text-sm text-gray-500">
+            {Math.round(((currentStep + 1) / steps.length) * 100)}% completado
+          </span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div
+            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+            style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Step indicators */}
+      <div className="flex flex-wrap gap-2 mb-8">
+        {steps.map((step, index) => {
+          const Icon = step.icon;
+          return (
+            <div
+              key={index}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${
+                index === currentStep
+                  ? 'bg-blue-600 text-white'
+                  : index < currentStep
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              <Icon size={16} />
+              {step.title}
+              {index < currentStep && <span>✓</span>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Current step content */}
+      <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+        {!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) && (
+          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-sm text-yellow-700">
+              ⚠️ Tu navegador no soporta reconocimiento de voz. Usa Chrome, Safari o Edge para activar esta función.
+            </p>
+          </div>
+        )}
+        {renderStep()}
+      </div>
+
+      {/* Navigation buttons */}
+      <div className="flex justify-between">
+        <button
+          onClick={prevStep}
+          disabled={currentStep === 0}
+          className={`px-6 py-3 rounded-lg ${
+            currentStep === 0
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-gray-600 text-white hover:bg-gray-700'
+          }`}
+        >
+          ← Anterior
+        </button>
+
+        <button
+          onClick={nextStep}
+          disabled={currentStep === steps.length - 1}
+          className={`px-6 py-3 rounded-lg ${
+            currentStep === steps.length - 1
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-blue-600 text-white hover:bg-blue-700'
+          }`}
+        >
+          {currentStep === steps.length - 1 ? '💾 Guardar y Finalizar' : 'Siguiente →'}
+        </button>
+      </div>
+
+      {/* Modal de Gestión de Memoria */}
+      {showMemoryManager && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            <div className="p-6 border-b">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold">🧹 Gestión de Memoria</h3>
+                <button
+                  onClick={() => setShowMemoryManager(false)}
+                  className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Estado de la memoria */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-semibold mb-3">📊 Estado Actual</h4>
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <div className="font-bold text-lg">{memoryInfo.used} MB</div>
+                    <div className="text-sm text-gray-600">Usado</div>
+                  </div>
+                  <div>
+                    <div className="font-bold text-lg">{memoryInfo.available} MB</div>
+                    <div className="text-sm text-gray-600">Disponible</div>
+                  </div>
+                  <div>
+                    <div className={`font-bold text-lg ${
+                      memoryInfo.percentage > 80 ? 'text-red-600' :
+                      memoryInfo.percentage > 50 ? 'text-yellow-600' : 'text-green-600'
+                    }`}>
+                      {memoryInfo.percentage}%
+                    </div>
+                    <div className="text-sm text-gray-600">Ocupado</div>
+                  </div>
+                </div>
+                <div className="mt-3 w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-300 ${
+                      memoryInfo.percentage > 80 ? 'bg-red-500' :
+                      memoryInfo.percentage > 50 ? 'bg-yellow-500' : 'bg-green-500'
+                    }`}
+                    style={{ width: `${memoryInfo.percentage}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Configuración de límite */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-semibold mb-3">⚙️ Configuración</h4>
+                <div className="flex items-center gap-3">
+                  <label className="text-sm">Máximo partes a mantener:</label>
+                  <select
+                    value={maxPartesLimit}
+                    onChange={(e) => saveSettings(parseInt(e.target.value))}
+                    className="px-3 py-1 border rounded focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value={10}>10 partes</option>
+                    <option value={25}>25 partes</option>
+                    <option value={50}>50 partes</option>
+                    <option value={100}>100 partes</option>
+                    <option value={200}>200 partes</option>
+                  </select>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Los partes más antiguos se eliminarán automáticamente al superar este límite
+                </p>
+              </div>
+
+              {/* Acciones de limpieza */}
+              <div className="space-y-3">
+                <h4 className="font-semibold">🗑️ Acciones de Limpieza</h4>
+
+                <button
+                  onClick={() => {
+                    const eliminated = cleanOldPartes(Math.floor(maxPartesLimit * 0.75));
+                    alert(`🧹 Se eliminaron ${eliminated} partes antiguos (manteniendo los ${Math.floor(maxPartesLimit * 0.75)} más recientes)`);
+                  }}
+                  className="w-full px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg hover:bg-yellow-200"
+                >
+                  🧹 Limpieza Rápida (eliminar 25% más antiguos)
+                </button>
+
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    id="startDate"
+                    className="flex-1 px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
+                    title="Fecha inicio"
+                  />
+                  <input
+                    type="date"
+                    id="endDate"
+                    className="flex-1 px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
+                    title="Fecha fin"
+                  />
+                  <button
+                    onClick={() => {
+                      const startDate = document.getElementById('startDate').value;
+                      const endDate = document.getElementById('endDate').value;
+                      if (startDate && endDate) {
+                        const deleted = deletePartesByDateRange(startDate, endDate);
+                        alert(`🗑️ Se eliminaron ${deleted} partes del rango ${startDate} - ${endDate}`);
+                      } else {
+                        alert('⚠️ Selecciona ambas fechas');
+                      }
+                    }}
+                    className="px-4 py-2 bg-orange-100 text-orange-800 rounded-lg hover:bg-orange-200"
+                  >
+                    🗑️ Eliminar Rango
+                  </button>
+                </div>
+
+                <button
+                  onClick={clearAllHistory}
+                  className="w-full px-4 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200"
+                >
+                  ⚠️ Eliminar Todo el Historial
+                </button>
+              </div>
+
+              {/* Información adicional */}
+              <div className="bg-green-50 p-3 rounded-lg">
+                <p className="text-sm text-green-700">
+                  💡 <strong>Consejos:</strong>
+                </p>
+                <ul className="text-sm text-green-600 mt-1 space-y-1">
+                  <li>• Exporta el historial regularmente como respaldo</li>
+                  <li>• Ajusta el límite según tus necesidades de almacenamiento</li>
+                  <li>• La limpieza automática se activa al superar el límite</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Historial */}
+      {showHistory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[80vh] overflow-hidden">
+            <div className="p-6 border-b">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold">📚 Historial de Partes Diarios</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={exportHistoryToCSV}
+                    className="px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm"
+                  >
+                    📊 Exportar Historial
+                  </button>
+                  <button
+                    onClick={() => setShowHistory(false)}
+                    className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {partesHistory.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>📝 No hay partes guardados aún</p>
+                  <p className="text-sm mt-2">Los partes completados aparecerán aquí</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {partesHistory.map((parte) => (
+                    <div key={parte.id} className="border rounded-lg p-4 hover:bg-gray-50">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-lg">{parte.nombreTrabajo}</h4>
+                          <p className="text-gray-600">📅 {parte.fecha}</p>
+                          <p className="text-sm text-gray-500">
+                            Creado: {new Date(parte.fechaCreacion).toLocaleString('es-ES')}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => loadParteFromHistory(parte)}
+                            className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm"
+                            title="Editar este parte"
+                          >
+                            ✏️ Editar
+                          </button>
+                          <button
+                            onClick={() => createTemplateFromParte(parte)}
+                            className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 text-sm"
+                            title="Usar como plantilla"
+                          >
+                            📋 Plantilla
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm('¿Estás seguro de eliminar este parte?')) {
+                                deleteParteFromHistory(parte.id);
+                              }
+                            }}
+                            className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm"
+                            title="Eliminar parte"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-3">
+                        <div>
+                          <span className="font-medium">Horas:</span> {parte.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0)}h
+                        </div>
+                        <div>
+                          <span className="font-medium">Operarios:</span> {parte.operarios.length}
+                        </div>
+                        <div>
+                          <span className="font-medium">Incidencias:</span> {parte.incidencias ? '⚠️ Sí' : '✅ No'}
+                        </div>
+                        <div>
+                          <span className="font-medium">Imágenes:</span> {parte.imagenes?.length || 0}
+                        </div>
+                      </div>
+
+                      {parte.trabajosRealizados && (
+                        <div className="mt-3 p-2 bg-gray-100 rounded text-sm">
+                          <strong>Trabajos:</strong> {parte.trabajosRealizados.substring(0, 150)}
+                          {parte.trabajosRealizados.length > 150 && '...'}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+        };
+
+        // Renderizar la aplicación
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<ParteDiarioTrabajo />);
+    </script>
+</body>
+</html>
