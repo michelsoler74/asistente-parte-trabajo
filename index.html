@@ -142,6 +142,16 @@
                 }
             };
 
+            // Función para convertir archivos a base64
+            const convertToBase64 = (file) => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = error => reject(error);
+                });
+            };
+
             const updateMemoryInfo = () => {
                 try {
                     let totalUsed = 0;
@@ -497,14 +507,25 @@
 
                     recognitionRef.current.onresult = (event) => {
                         let finalTranscript = '';
+                        let interimTranscript = '';
 
                         for (let i = event.resultIndex; i < event.results.length; i++) {
                             const transcript = event.results[i][0].transcript;
                             if (event.results[i].isFinal) {
                                 finalTranscript += transcript;
+                            } else {
+                                interimTranscript += transcript;
                             }
                         }
 
+                        // Mostrar texto provisional en tiempo real
+                        if (interimTranscript && currentField) {
+                            const currentValue = getCurrentFieldValue(currentField);
+                            const preview = currentValue + ' ' + interimTranscript;
+                            updateFieldPreview(currentField, preview);
+                        }
+
+                        // Actualizar con texto final
                         if (finalTranscript) {
                             handleVoiceInput(currentField, finalTranscript.trim());
                         }
@@ -529,11 +550,44 @@
                 };
             }, []);
 
+            const getCurrentFieldValue = (fieldName) => {
+                if (fieldName.includes('operario-')) {
+                    const [, index, field] = fieldName.split('-');
+                    const operarioIndex = parseInt(index);
+                    return formData.operarios[operarioIndex]?.[field] || '';
+                }
+                return formData[fieldName] || '';
+            };
+
+            const updateFieldPreview = (fieldName, value) => {
+                // Esta función actualizará visualmente el campo pero no guardará el cambio
+                // Se usa solo para mostrar la transcripción en tiempo real
+                const element = document.querySelector(`[data-voice-field="${fieldName}"]`);
+                if (element) {
+                    element.style.backgroundColor = '#fef3c7'; // Color amarillo suave para preview
+                    // No actualizar el valor real aún
+                }
+            };
+
             const startVoiceRecognition = (fieldName) => {
-                if (recognitionRef.current && !isListening) {
+                if (!recognitionRef.current) {
+                    alert('❌ Reconocimiento de voz no disponible.\\n\\nAsegúrate de:\\n• Usar Chrome, Safari o Edge\\n• Permitir acceso al micrófono\\n• Tener conexión a internet');
+                    return;
+                }
+
+                if (!isListening) {
                     setCurrentField(fieldName);
                     setIsListening(true);
-                    recognitionRef.current.start();
+
+                    try {
+                        recognitionRef.current.start();
+                        console.log('🎤 Iniciando reconocimiento de voz para:', fieldName);
+                    } catch (error) {
+                        console.error('Error al iniciar reconocimiento:', error);
+                        setIsListening(false);
+                        setCurrentField('');
+                        alert('❌ Error al iniciar el reconocimiento de voz.\\n\\nPrueba a:\\n• Refrescar la página\\n• Verificar permisos del micrófono\\n• Cerrar otras aplicaciones que usen el micrófono');
+                    }
                 }
             };
 
@@ -546,13 +600,24 @@
             };
 
             const handleVoiceInput = (fieldName, transcript) => {
+                console.log('📝 Transcripción recibida:', transcript, 'para campo:', fieldName);
+
                 if (fieldName.includes('operario-')) {
                     const [, index, field] = fieldName.split('-');
                     const operarioIndex = parseInt(index);
-                    updateOperario(operarioIndex, field, formData.operarios[operarioIndex][field] + ' ' + transcript);
+                    const currentValue = formData.operarios[operarioIndex]?.[field] || '';
+                    const newValue = currentValue ? currentValue + ' ' + transcript : transcript;
+                    updateOperario(operarioIndex, field, newValue);
                 } else {
                     const currentValue = formData[fieldName] || '';
-                    handleInputChange(fieldName, currentValue + ' ' + transcript);
+                    const newValue = currentValue ? currentValue + ' ' + transcript : transcript;
+                    handleInputChange(fieldName, newValue);
+                }
+
+                // Limpiar el preview visual
+                const element = document.querySelector(`[data-voice-field="${fieldName}"]`);
+                if (element) {
+                    element.style.backgroundColor = '';
                 }
             };
 
@@ -596,6 +661,16 @@
                     ...prev,
                     operarios: [...prev.operarios, { nombre: '', horas: '' }]
                 }));
+            };
+
+            // Función para validar si se puede finalizar el parte
+            const canFinishParte = () => {
+                const hasWorkName = formData.nombreTrabajo && formData.nombreTrabajo.trim().length > 0;
+                const hasValidOperario = formData.operarios.some(op =>
+                    op.nombre && op.nombre.trim().length > 0 &&
+                    op.horas && parseFloat(op.horas) > 0
+                );
+                return hasWorkName && hasValidOperario;
             };
 
             const updateOperario = (index, field, value) => {
@@ -645,10 +720,35 @@ ${formData.observaciones ? `💡 Observaciones:\\n${formData.observaciones}` : '
             };
 
             const nextStep = () => {
+                // Validaciones por paso
+                if (currentStep === 0) {
+                    if (!formData.nombreTrabajo || formData.nombreTrabajo.trim().length === 0) {
+                        alert('⚠️ Por favor, ingresa el nombre del trabajo antes de continuar.');
+                        return;
+                    }
+                }
+
+                if (currentStep === 2) {
+                    const hasValidOperario = formData.operarios.some(op =>
+                        op.nombre && op.nombre.trim().length > 0 &&
+                        op.horas && parseFloat(op.horas) > 0
+                    );
+                    if (!hasValidOperario) {
+                        alert('⚠️ Por favor, agrega al menos un operario con nombre y horas antes de continuar.');
+                        return;
+                    }
+                }
+
                 if (currentStep === 7) {
                     generateResumen();
                 }
+
                 if (currentStep === 8) {
+                    if (!canFinishParte()) {
+                        alert('⚠️ No se puede finalizar el parte.\\n\\nVerifica que tengas:\\n• Nombre del trabajo\\n• Al menos un operario con nombre y horas');
+                        return;
+                    }
+
                     if (saveToHistory()) {
                         alert('✅ Parte diario guardado en el historial correctamente');
                     } else {
@@ -656,6 +756,7 @@ ${formData.observaciones ? `💡 Observaciones:\\n${formData.observaciones}` : '
                     }
                     return;
                 }
+
                 if (currentStep < steps.length - 1) {
                     setCurrentStep(currentStep + 1);
                 }
@@ -699,11 +800,11 @@ ${formData.resumenInteligente}
 Generado el ${new Date().toLocaleString('es-ES')}
                 `.trim();
 
-                const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+                const blob = new Blob([content], { type: 'text/html;charset=utf-8' });
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `Parte_Diario_${formData.fecha}_${formData.nombreTrabajo.replace(/[^a-zA-Z0-9]/g, '_')}.pdf.txt`;
+                a.download = `Parte_Diario_${formData.fecha}_${formData.nombreTrabajo.replace(/[^a-zA-Z0-9]/g, '_')}.html`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -713,39 +814,77 @@ Generado el ${new Date().toLocaleString('es-ES')}
             const exportToCSV = () => {
                 const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
 
+                // CSV optimizado para Excel/Google Sheets
                 const csvData = [
+                    // Encabezado con información general
+                    ['PARTE DIARIO DE TRABAJO'],
+                    [''],
                     ['INFORMACIÓN GENERAL'],
-                    ['Campo', 'Valor'],
-                    ['Nombre del Trabajo', formData.nombreTrabajo],
+                    ['Trabajo', formData.nombreTrabajo],
                     ['Fecha', formData.fecha],
-                    ['Total Horas Trabajadas', totalHoras],
-                    ['Número de Operarios', formData.operarios.length],
+                    ['Total Horas', totalHoras],
+                    ['Número Operarios', formData.operarios.length],
+                    ['Tiene Incidencias', formData.incidencias ? 'Sí' : 'No'],
+                    ['Imágenes Adjuntas', formData.imagenes.length],
                     [''],
-                    ['PERSONAL'],
-                    ['Nombre', 'Horas'],
-                    ...formData.operarios.map(op => [op.nombre, op.horas]),
+
+                    // Tabla de operarios
+                    ['PERSONAL Y HORAS'],
+                    ['Operario', 'Horas Trabajadas'],
+                    ...formData.operarios.map(op => [op.nombre, parseFloat(op.horas) || 0]),
+                    ['TOTAL', totalHoras],
                     [''],
-                    ['DESCRIPCIÓN DE TRABAJOS'],
-                    ['Trabajos Realizados', `"${formData.trabajosRealizados.replace(/"/g, '""')}"`],
+
+                    // Descripción de trabajos (formato multilínea)
+                    ['TRABAJOS REALIZADOS'],
+                    [formData.trabajosRealizados.replace(/"/g, '""')],
                     [''],
-                    ['MATERIALES'],
-                    ['Materiales Utilizados', `"${formData.materialesUtilizados.replace(/"/g, '""')}"`],
+
+                    // Materiales
+                    ['MATERIALES UTILIZADOS'],
+                    [formData.materialesUtilizados.replace(/"/g, '""')],
                     [''],
-                    ['INCIDENCIAS Y OBSERVACIONES'],
-                    ['Incidencias', `"${formData.incidencias.replace(/"/g, '""')}"`],
-                    ['Observaciones', `"${formData.observaciones.replace(/"/g, '""')}"`],
-                    [''],
-                    ['PLANIFICACIÓN'],
-                    ['Tareas Pendientes', `"${formData.tareasPendientes.replace(/"/g, '""')}"`],
-                    [''],
-                    ['RESUMEN'],
-                    ['Resumen Inteligente', `"${formData.resumenInteligente.replace(/"/g, '""')}"`],
-                    [''],
+
+                    // Incidencias (solo si existen)
+                    ...(formData.incidencias ? [
+                        ['INCIDENCIAS'],
+                        [formData.incidencias.replace(/"/g, '""')],
+                        ['']
+                    ] : []),
+
+                    // Observaciones (solo si existen)
+                    ...(formData.observaciones ? [
+                        ['OBSERVACIONES'],
+                        [formData.observaciones.replace(/"/g, '""')],
+                        ['']
+                    ] : []),
+
+                    // Tareas pendientes (solo si existen)
+                    ...(formData.tareasPendientes ? [
+                        ['TAREAS PENDIENTES'],
+                        [formData.tareasPendientes.replace(/"/g, '""')],
+                        ['']
+                    ] : []),
+
+                    // Metadatos
                     ['METADATOS'],
-                    ['Generado el', new Date().toLocaleString('es-ES')]
+                    ['Generado el', new Date().toLocaleString('es-ES')],
+                    ['ID del Parte', currentParteId || 'N/A'],
+                    ['']
                 ];
 
-                const csvContent = csvData.map(row => row.join(',')).join('\\n');
+                // Añadir BOM para compatibilidad con Excel
+                const BOM = '\\uFEFF';
+                const csvContent = BOM + csvData.map(row => {
+                    return row.map(cell => {
+                        // Escapar comillas y envolver en comillas si contiene comas, saltos de línea o comillas
+                        const cellStr = String(cell);
+                        if (cellStr.includes(',') || cellStr.includes('\\n') || cellStr.includes('\"')) {
+                            return `"${cellStr.replace(/"/g, '""')}"`;
+                        }
+                        return cellStr;
+                    }).join(',');
+                }).join('\\n');
 
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
                 const url = window.URL.createObjectURL(blob);
@@ -756,6 +895,11 @@ Generado el ${new Date().toLocaleString('es-ES')}
                 a.click();
                 document.body.removeChild(a);
                 window.URL.revokeObjectURL(url);
+
+                // Mostrar instrucciones
+                setTimeout(() => {
+                    alert('📊 CSV descargado con éxito.\\n\\nOptimizado para:\\n• Microsoft Excel\\n• Google Sheets\\n• LibreOffice Calc\\n\\nTip: Usa "Datos > Texto en columnas" si necesitas separar más campos.');
+                }, 500);
             };
 
             const renderStep = () => {
@@ -773,6 +917,7 @@ Generado el ${new Date().toLocaleString('es-ES')}
                                             onChange={(e) => handleInputChange('nombreTrabajo', e.target.value)}
                                             className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                                             placeholder="Ej: Construcción edificio residencial, Reparación maquinaria..."
+                                            data-voice-field="nombreTrabajo"
                                         />
                                         <VoiceButton fieldName="nombreTrabajo" />
                                     </div>
@@ -802,6 +947,7 @@ Generado el ${new Date().toLocaleString('es-ES')}
                                             rows={6}
                                             className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                                             placeholder="Ej: \\n- Excavación de zanjas para cimientos\\n- Instalación de tuberías de agua\\n- Hormigonado de la base..."
+                                            data-voice-field="trabajosRealizados"
                                         />
                                         <div className="flex flex-col">
                                             <VoiceButton fieldName="trabajosRealizados" />
@@ -831,6 +977,7 @@ Generado el ${new Date().toLocaleString('es-ES')}
                                                     onChange={(e) => updateOperario(index, 'nombre', e.target.value)}
                                                     className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                                                     placeholder="Nombre completo"
+                                                    data-voice-field={`operario-${index}-nombre`}
                                                 />
                                                 <VoiceButton fieldName={`operario-${index}-nombre`} />
                                             </div>
@@ -993,15 +1140,74 @@ Generado el ${new Date().toLocaleString('es-ES')}
                                         accept="image/*"
                                         onChange={(e) => {
                                             const files = Array.from(e.target.files);
-                                            handleInputChange('imagenes', files);
+                                            console.log('📷 Archivos seleccionados:', files.length);
+
+                                            // Convertir archivos a base64 para almacenamiento
+                                            const processFiles = async () => {
+                                                const processedImages = [];
+
+                                                for (const file of files) {
+                                                    try {
+                                                        const base64 = await convertToBase64(file);
+                                                        processedImages.push({
+                                                            name: file.name,
+                                                            size: file.size,
+                                                            type: file.type,
+                                                            data: base64,
+                                                            timestamp: new Date().toISOString()
+                                                        });
+                                                    } catch (error) {
+                                                        console.error('Error procesando imagen:', file.name, error);
+                                                    }
+                                                }
+
+                                                const allImages = [...(formData.imagenes || []), ...processedImages];
+                                                handleInputChange('imagenes', allImages);
+                                            };
+
+                                            processFiles();
                                         }}
                                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                                     />
-                                    {formData.imagenes.length > 0 && (
+
+                                    {formData.imagenes && formData.imagenes.length > 0 && (
                                         <div className="mt-3">
-                                            <p className="text-sm text-gray-600">
-                                                {formData.imagenes.length} imagen(es) seleccionada(s)
+                                            <p className="text-sm text-gray-600 mb-3">
+                                                {formData.imagenes.length} imagen(es) adjuntada(s):
                                             </p>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                                {formData.imagenes.map((image, index) => (
+                                                    <div key={index} className="relative border rounded-lg p-2 bg-gray-50">
+                                                        <img
+                                                            src={image.data}
+                                                            alt={image.name}
+                                                            className="w-full h-24 object-cover rounded mb-2"
+                                                            onError={(e) => {
+                                                                e.target.style.display = 'none';
+                                                                e.target.nextSibling.style.display = 'block';
+                                                            }}
+                                                        />
+                                                        <div className="hidden text-center p-4 text-gray-500 text-sm">
+                                                            📷 {image.name}
+                                                        </div>
+                                                        <p className="text-xs text-gray-600 truncate" title={image.name}>
+                                                            {image.name}
+                                                        </p>
+                                                        <p className="text-xs text-gray-500">
+                                                            {(image.size / 1024).toFixed(0)} KB
+                                                        </p>
+                                                        <button
+                                                            onClick={() => {
+                                                                const newImages = formData.imagenes.filter((_, i) => i !== index);
+                                                                handleInputChange('imagenes', newImages);
+                                                            }}
+                                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -1049,7 +1255,7 @@ Generado el ${new Date().toLocaleString('es-ES')}
                                         onClick={exportToPDF}
                                         className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center justify-center gap-2"
                                     >
-                                        📄 Descargar PDF
+                                        📄 Descargar HTML/PDF
                                     </button>
                                     <button
                                         onClick={exportToCSV}
@@ -1182,12 +1388,15 @@ Generado el ${new Date().toLocaleString('es-ES')}
 
                         <button
                             onClick={nextStep}
-                            disabled={currentStep === steps.length - 1}
+                            disabled={currentStep === steps.length - 1 && !canFinishParte()}
                             className={`px-6 py-3 rounded-lg ${
-                                currentStep === steps.length - 1
+                                currentStep === steps.length - 1 && !canFinishParte()
                                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                                    : currentStep === steps.length - 1
+                                        ? 'bg-green-600 text-white hover:bg-green-700'
+                                        : 'bg-blue-600 text-white hover:bg-blue-700'
                             }`}
+                            title={currentStep === steps.length - 1 && !canFinishParte() ? 'Completa los campos obligatorios: Nombre del trabajo y al menos un operario' : ''}
                         >
                             {currentStep === steps.length - 1 ? '💾 Guardar y Finalizar' : 'Siguiente →'}
                         </button>
