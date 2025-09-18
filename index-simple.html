@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📋 Asistente Personal - Parte Diario de Trabajo</title>
+    <meta name="description" content="Asistente personal completo para gestión de partes diarios de trabajo con dictado por voz y guardado automático">
+    <meta name="keywords" content="parte diario, trabajo, dictado voz, construcción, mantenimiento">
+    <meta name="author" content="Michel Soler">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="90" font-size="90">📋</text></svg>">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React y ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.development.js"></script>
+
+    <!-- Babel para transformar JSX -->
+    <script src="https://unpkg.com/@babel/standalone@7.23.4/babel.min.js"></script>
+
+    <style>
+        /* Animaciones personalizadas */
+        @keyframes pulse-custom {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .animate-pulse-custom {
+            animation: pulse-custom 1s ease-in-out infinite;
+        }
+
+        /* Estilos para el scroll personalizado */
+        .custom-scroll::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #a1a1a1;
+        }
+
+        /* Mejoras para pantallas pequeñas */
+        @media (max-width: 640px) {
+            .container-mobile {
+                padding: 1rem;
+            }
+        }
+
+        /* Estilos para el dictado por voz */
+        .voice-active {
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+            animation: pulse-custom 1s ease-in-out infinite;
+        }
+
+        /* Iconos emoji para better compatibility */
+        .icon {
+            display: inline-block;
+            font-size: 16px;
+            width: 16px;
+            height: 16px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div id="root" class="min-h-screen">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="text-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p class="text-gray-600">Cargando Asistente Personal...</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        // Componentes de iconos usando emojis
+        const FileText = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '📄');
+        const Calendar = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '📅');
+        const Users = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '👥');
+        const Package = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '📦');
+        const AlertTriangle = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '⚠️');
+        const Clock = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '⏰');
+        const Camera = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '📷');
+        const Brain = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '🧠');
+        const Mic = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '🎤');
+        const MicOff = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '🔇');
+
+        const ParteDiarioTrabajo = () => {
+            const [currentStep, setCurrentStep] = useState(0);
+            const [isListening, setIsListening] = useState(false);
+            const [currentField, setCurrentField] = useState('');
+            const [saveStatus, setSaveStatus] = useState('saved'); // 'saved', 'saving', 'error'
+            const [showHistory, setShowHistory] = useState(false);
+            const [showMemoryManager, setShowMemoryManager] = useState(false);
+            const [memoryInfo, setMemoryInfo] = useState({ used: 0, available: 0, percentage: 0 });
+            const [maxPartesLimit, setMaxPartesLimit] = useState(50);
+            const [currentParteId, setCurrentParteId] = useState(null);
+            const [partesHistory, setPartesHistory] = useState([]);
+            const recognitionRef = useRef(null);
+            const saveTimeoutRef = useRef(null);
+
+            const [formData, setFormData] = useState({
+                nombreTrabajo: '',
+                fecha: new Date().toISOString().split('T')[0],
+                trabajosRealizados: '',
+                operarios: [{ nombre: '', horas: '' }],
+                materialesUtilizados: '',
+                incidencias: '',
+                observaciones: '',
+                tareasPendientes: '',
+                imagenes: [],
+                resumenInteligente: ''
+            });
+
+            // Cargar datos guardados al inicializar
+            useEffect(() => {
+                loadSavedData();
+                loadHistoryData();
+                updateMemoryInfo();
+                loadSettings();
+            }, []);
+
+            // Actualizar info de memoria cuando cambia el historial
+            useEffect(() => {
+                updateMemoryInfo();
+            }, [partesHistory]);
+
+            const loadSettings = () => {
+                const savedLimit = localStorage.getItem('partes_limit');
+                if (savedLimit) {
+                    setMaxPartesLimit(parseInt(savedLimit));
+                }
+            };
+
+            const updateMemoryInfo = () => {
+                try {
+                    // Calcular uso aproximado de localStorage
+                    let totalUsed = 0;
+                    for (let key in localStorage) {
+                        if (localStorage.hasOwnProperty(key)) {
+                            totalUsed += localStorage[key].length + key.length;
+                        }
+                    }
+
+                    // Estimación: 5MB disponibles (conservador)
+                    const availableSpace = 5 * 1024 * 1024; // 5MB en bytes
+                    const usedMB = (totalUsed / 1024 / 1024).toFixed(2);
+                    const availableMB = (availableSpace / 1024 / 1024).toFixed(2);
+                    const percentage = Math.min((totalUsed / availableSpace) * 100, 100);
+
+                    setMemoryInfo({
+                        used: usedMB,
+                        available: availableMB,
+                        percentage: percentage.toFixed(1)
+                    });
+
+                    // Alerta si se está llenando
+                    if (percentage > 80) {
+                        console.warn('Memoria del navegador casi llena:', percentage + '%');
+                    }
+
+                } catch (error) {
+                    console.error('Error calculando memoria:', error);
+                }
+            };
+
+            const loadSavedData = () => {
+                try {
+                    const savedData = localStorage.getItem('parte_diario_current');
+                    const savedId = localStorage.getItem('parte_diario_current_id');
+
+                    if (savedData) {
+                        const parsedData = JSON.parse(savedData);
+                        setFormData(parsedData);
+                        setSaveStatus('saved');
+                    }
+
+                    if (savedId) {
+                        setCurrentParteId(savedId);
+                    } else {
+                        // Crear nuevo ID si no existe
+                        const newId = 'parte_' + Date.now();
+                        setCurrentParteId(newId);
+                        localStorage.setItem('parte_diario_current_id', newId);
+                    }
+                } catch (error) {
+                    console.error('Error cargando datos:', error);
+                    setSaveStatus('error');
+                }
+            };
+
+            const loadHistoryData = () => {
+                try {
+                    const history = localStorage.getItem('partes_diarios_history');
+                    if (history) {
+                        setPartesHistory(JSON.parse(history));
+                    }
+                } catch (error) {
+                    console.error('Error cargando historial:', error);
+                }
+            };
+
+            // Guardado automático cuando cambian los datos
+            useEffect(() => {
+                if (currentParteId) {
+                    autoSave();
+                }
+            }, [formData]);
+
+            const autoSave = () => {
+                setSaveStatus('saving');
+
+                // Cancelar guardado anterior si existe
+                if (saveTimeoutRef.current) {
+                    clearTimeout(saveTimeoutRef.current);
+                }
+
+                // Guardar después de 2 segundos de inactividad
+                saveTimeoutRef.current = setTimeout(() => {
+                    try {
+                        localStorage.setItem('parte_diario_current', JSON.stringify(formData));
+                        setSaveStatus('saved');
+                    } catch (error) {
+                        console.error('Error guardando:', error);
+                        setSaveStatus('error');
+                    }
+                }, 2000);
+            };
+
+            const SaveStatusIndicator = () => {
+                const getStatusInfo = () => {
+                    switch (saveStatus) {
+                        case 'saving':
+                            return { text: 'Guardando...', color: 'text-yellow-600', icon: '⏳' };
+                        case 'saved':
+                            return { text: 'Guardado', color: 'text-green-600', icon: '✅' };
+                        case 'error':
+                            return { text: 'Error al guardar', color: 'text-red-600', icon: '❌' };
+                        default:
+                            return { text: 'Sin guardar', color: 'text-gray-600', icon: '⚪' };
+                    }
+                };
+
+                const status = getStatusInfo();
+                return (
+                    <div className={`flex items-center gap-1 text-sm ${status.color}`}>
+                        <span>{status.icon}</span>
+                        <span>{status.text}</span>
+                    </div>
+                );
+            };
+
+            // Inicializar reconocimiento de voz
+            useEffect(() => {
+                if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    recognitionRef.current = new SpeechRecognition();
+                    recognitionRef.current.continuous = true;
+                    recognitionRef.current.interimResults = true;
+                    recognitionRef.current.lang = 'es-ES';
+
+                    recognitionRef.current.onresult = (event) => {
+                        let finalTranscript = '';
+
+                        for (let i = event.resultIndex; i < event.results.length; i++) {
+                            const transcript = event.results[i][0].transcript;
+                            if (event.results[i].isFinal) {
+                                finalTranscript += transcript;
+                            }
+                        }
+
+                        if (finalTranscript) {
+                            handleVoiceInput(currentField, finalTranscript.trim());
+                        }
+                    };
+
+                    recognitionRef.current.onend = () => {
+                        setIsListening(false);
+                        setCurrentField('');
+                    };
+
+                    recognitionRef.current.onerror = (event) => {
+                        console.error('Error de reconocimiento de voz:', event.error);
+                        setIsListening(false);
+                        setCurrentField('');
+                    };
+                }
+
+                return () => {
+                    if (recognitionRef.current) {
+                        recognitionRef.current.stop();
+                    }
+                };
+            }, []);
+
+            const startVoiceRecognition = (fieldName) => {
+                if (recognitionRef.current && !isListening) {
+                    setCurrentField(fieldName);
+                    setIsListening(true);
+                    recognitionRef.current.start();
+                }
+            };
+
+            const stopVoiceRecognition = () => {
+                if (recognitionRef.current && isListening) {
+                    recognitionRef.current.stop();
+                    setIsListening(false);
+                    setCurrentField('');
+                }
+            };
+
+            const handleVoiceInput = (fieldName, transcript) => {
+                const currentValue = formData[fieldName] || '';
+                handleInputChange(fieldName, currentValue + ' ' + transcript);
+            };
+
+            const VoiceButton = ({ fieldName }) => {
+                const isCurrentlyListening = isListening && currentField === fieldName;
+
+                return (
+                    <button
+                        type="button"
+                        onClick={() => isCurrentlyListening ? stopVoiceRecognition() : startVoiceRecognition(fieldName)}
+                        className={`p-2 rounded-lg transition-all duration-200 ${
+                            isCurrentlyListening
+                                ? 'bg-red-500 text-white animate-pulse'
+                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                        }`}
+                        title={isCurrentlyListening ? 'Detener dictado' : 'Iniciar dictado por voz'}
+                    >
+                        {isCurrentlyListening ? <MicOff size={16} /> : <Mic size={16} />}
+                    </button>
+                );
+            };
+
+            const steps = [
+                { title: 'Información General', icon: FileText },
+                { title: 'Trabajos Realizados', icon: FileText },
+                { title: 'Operarios y Horas', icon: Users },
+                { title: 'Materiales', icon: Package },
+                { title: 'Incidencias', icon: AlertTriangle },
+                { title: 'Observaciones', icon: FileText },
+                { title: 'Tareas Pendientes', icon: Clock },
+                { title: 'Imágenes', icon: Camera },
+                { title: 'Resumen Final', icon: Brain }
+            ];
+
+            const handleInputChange = (field, value) => {
+                setFormData(prev => ({ ...prev, [field]: value }));
+            };
+
+            const addOperario = () => {
+                setFormData(prev => ({
+                    ...prev,
+                    operarios: [...prev.operarios, { nombre: '', horas: '' }]
+                }));
+            };
+
+            const updateOperario = (index, field, value) => {
+                setFormData(prev => ({
+                    ...prev,
+                    operarios: prev.operarios.map((op, i) =>
+                        i === index ? { ...op, [field]: value } : op
+                    )
+                }));
+            };
+
+            const removeOperario = (index) => {
+                if (formData.operarios.length > 1) {
+                    setFormData(prev => ({
+                        ...prev,
+                        operarios: prev.operarios.filter((_, i) => i !== index)
+                    }));
+                }
+            };
+
+            const nextStep = () => {
+                if (currentStep < steps.length - 1) {
+                    setCurrentStep(currentStep + 1);
+                }
+            };
+
+            const prevStep = () => {
+                if (currentStep > 0) {
+                    setCurrentStep(currentStep - 1);
+                }
+            };
+
+            const renderStep = () => {
+                switch (currentStep) {
+                    case 0:
+                        return (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-blue-700 mb-4">Información General del Trabajo</h3>
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">¿Cuál es el nombre del trabajo o proyecto?</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={formData.nombreTrabajo}
+                                            onChange={(e) => handleInputChange('nombreTrabajo', e.target.value)}
+                                            className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Ej: Construcción edificio residencial, Reparación maquinaria..."
+                                        />
+                                        <VoiceButton fieldName="nombreTrabajo" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Fecha del trabajo</label>
+                                    <input
+                                        type="date"
+                                        value={formData.fecha}
+                                        onChange={(e) => handleInputChange('fecha', e.target.value)}
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+                        );
+
+                    case 1:
+                        return (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-blue-700 mb-4">Trabajos Realizados</h3>
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Describe detalladamente los trabajos realizados hoy</label>
+                                    <div className="flex gap-2">
+                                        <textarea
+                                            value={formData.trabajosRealizados}
+                                            onChange={(e) => handleInputChange('trabajosRealizados', e.target.value)}
+                                            rows={6}
+                                            className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Ej: \n- Excavación de zanjas para cimientos\n- Instalación de tuberías de agua\n- Hormigonado de la base..."
+                                        />
+                                        <div className="flex flex-col">
+                                            <VoiceButton fieldName="trabajosRealizados" />
+                                        </div>
+                                    </div>
+                                    {isListening && currentField === 'trabajosRealizados' && (
+                                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                                            <p className="text-sm text-red-700">🎤 Dictando... Habla claramente y haz pausas entre ideas</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+
+                    case 2:
+                        return (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-blue-700 mb-4">Operarios y Horas Trabajadas</h3>
+                                {formData.operarios.map((operario, index) => (
+                                    <div key={index} className="flex gap-3 items-end">
+                                        <div className="flex-1">
+                                            <label className="block text-sm font-medium mb-2">Nombre del operario</label>
+                                            <input
+                                                type="text"
+                                                value={operario.nombre}
+                                                onChange={(e) => updateOperario(index, 'nombre', e.target.value)}
+                                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                placeholder="Nombre completo"
+                                            />
+                                        </div>
+                                        <div className="w-24">
+                                            <label className="block text-sm font-medium mb-2">Horas</label>
+                                            <input
+                                                type="number"
+                                                value={operario.horas}
+                                                onChange={(e) => updateOperario(index, 'horas', e.target.value)}
+                                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                placeholder="8"
+                                                step="0.5"
+                                            />
+                                        </div>
+                                        {formData.operarios.length > 1 && (
+                                            <button
+                                                onClick={() => removeOperario(index)}
+                                                className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                                            >
+                                                ✕
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                                <button
+                                    onClick={addOperario}
+                                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+                                >
+                                    + Añadir Operario
+                                </button>
+                                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                                    <strong>Total horas: {formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0)} horas</strong>
+                                </div>
+                            </div>
+                        );
+
+                    default:
+                        return (
+                            <div className="text-center py-8">
+                                <h3 className="text-lg font-semibold mb-4">Paso {currentStep + 1} - En desarrollo</h3>
+                                <p className="text-gray-600">Esta sección está siendo desarrollada...</p>
+                            </div>
+                        );
+                }
+            };
+
+            return (
+                <div className="max-w-4xl mx-auto p-6 bg-white">
+                    <div className="mb-8">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h1 className="text-3xl font-bold text-gray-800 mb-2">📋 Asistente Personal</h1>
+                                <h2 className="text-xl text-gray-600">Parte Diario de Trabajo</h2>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                                <SaveStatusIndicator />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="mb-8">
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-medium text-gray-600">
+                                Paso {currentStep + 1} de {steps.length}
+                            </span>
+                            <span className="text-sm text-gray-500">
+                                {Math.round(((currentStep + 1) / steps.length) * 100)}% completado
+                            </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Step indicators */}
+                    <div className="flex flex-wrap gap-2 mb-8">
+                        {steps.map((step, index) => {
+                            const Icon = step.icon;
+                            return (
+                                <div
+                                    key={index}
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${
+                                        index === currentStep
+                                            ? 'bg-blue-600 text-white'
+                                            : index < currentStep
+                                                ? 'bg-green-100 text-green-700'
+                                                : 'bg-gray-100 text-gray-600'
+                                    }`}
+                                >
+                                    <Icon size={16} />
+                                    {step.title}
+                                    {index < currentStep && <span>✓</span>}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Current step content */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+                        {!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) && (
+                            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                <p className="text-sm text-yellow-700">
+                                    ⚠️ Tu navegador no soporta reconocimiento de voz. Usa Chrome, Safari o Edge para activar esta función.
+                                </p>
+                            </div>
+                        )}
+                        {renderStep()}
+                    </div>
+
+                    {/* Navigation buttons */}
+                    <div className="flex justify-between">
+                        <button
+                            onClick={prevStep}
+                            disabled={currentStep === 0}
+                            className={`px-6 py-3 rounded-lg ${
+                                currentStep === 0
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : 'bg-gray-600 text-white hover:bg-gray-700'
+                            }`}
+                        >
+                            ← Anterior
+                        </button>
+
+                        <button
+                            onClick={nextStep}
+                            disabled={currentStep === steps.length - 1}
+                            className={`px-6 py-3 rounded-lg ${
+                                currentStep === steps.length - 1
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                            }`}
+                        >
+                            {currentStep === steps.length - 1 ? '💾 Guardar y Finalizar' : 'Siguiente →'}
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        // Renderizar la aplicación
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<ParteDiarioTrabajo />);
+    </script>
+</body>
+</html>
