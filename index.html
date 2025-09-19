@@ -287,34 +287,42 @@
                 document.body.appendChild(loadingAlert);
 
                 try {
-                    // Preparar datos para envío con imágenes completas
-                    const dataToSend = {
+                    // Calcular total de horas
+                    const totalHoras = formData.operarios?.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0) || 0;
+
+                    // Preparar información de imágenes
+                    const imagenesInfo = (formData.imagenes || []).filter(img => img.url && img.url.startsWith('data:'));
+                    const infoImagenes = imagenesInfo.length > 0
+                        ? `📷 ${imagenesInfo.length} imagen(es): ${imagenesInfo.map(img => img.name).join(', ')}`
+                        : 'Sin imágenes';
+
+                    // Preparar información de albaranes
+                    const albaranesInfo = (formData.albaranes || []).filter(alb => alb.url && alb.url.startsWith('data:'));
+                    const infoAlbaranes = albaranesInfo.length > 0
+                        ? `📄 ${albaranesInfo.length} albarán(es): ${albaranesInfo.map(alb => alb.name).join(', ')}`
+                        : 'Sin albaranes';
+
+                    // Preparar parámetros para GET
+                    const params = new URLSearchParams({
                         nombreTrabajo: formData.nombreTrabajo || 'Sin especificar',
                         fecha: formData.fecha || new Date().toISOString().split('T')[0],
-                        operarios: formData.operarios || [],
+                        totalHoras: totalHoras.toString(),
+                        numOperarios: (formData.operarios?.length || 0).toString(),
+                        listaOperarios: formData.operarios?.map(op => `${op.nombre}: ${op.horas}h`).join(', ') || 'Sin operarios',
                         trabajosRealizados: formData.trabajosRealizados || 'Sin especificar',
                         materialesUtilizados: formData.materialesUtilizados || 'Sin materiales',
                         incidencias: formData.incidencias || 'Sin incidencias',
                         observaciones: formData.observaciones || 'Sin observaciones',
                         tareasPendientes: formData.tareasPendientes || 'Sin tareas pendientes',
-                        imagenes: (formData.imagenes || []).filter(img => img.url && img.url.startsWith('data:')),
-                        albaranes: (formData.albaranes || []).filter(alb => alb.url && alb.url.startsWith('data:'))
-                    };
+                        infoImagenes: infoImagenes,
+                        infoAlbaranes: infoAlbaranes
+                    });
 
-                    console.log('📊 ENVIANDO A GOOGLE SHEETS:', dataToSend);
-                    console.log('🖼️ IMÁGENES ENVIADAS:', dataToSend.imagenes.length, dataToSend.imagenes);
-                    console.log('📄 ALBARANES ENVIADOS:', dataToSend.albaranes.length, dataToSend.albaranes);
+                    console.log('📊 ENVIANDO A GOOGLE SHEETS (GET):', params.toString());
 
-                    // Debug alert temporal
-                    alert(`🐛 DEBUG:\\n\\nImágenes: ${dataToSend.imagenes.length}\\nAlbaranes: ${dataToSend.albaranes.length}\\n\\nFormData original:\\nImágenes: ${(formData.imagenes || []).length}\\nAlbaranes: ${(formData.albaranes || []).length}`);
-
-                    // Enviar datos (sin no-cors para permitir POST correcto)
-                    const response = await fetch(sheetsUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(dataToSend)
+                    // Enviar datos usando GET con parámetros
+                    const response = await fetch(`${sheetsUrl}?${params.toString()}`, {
+                        method: 'GET'
                     });
 
                     // Quitar indicador de carga
