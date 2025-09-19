@@ -299,23 +299,20 @@
                 form.target = 'hidden_iframe';
                 form.style.display = 'none';
 
-                // Preparar los datos para Google Forms (usando entry IDs estándar)
+                // Preparar los datos para Google Forms (12 columnas exactas)
                 const formFields = {
                     'entry.1000001': formData.nombreTrabajo, // Proyecto
                     'entry.1000002': formData.fecha, // Fecha
-                    'entry.1000003': fecha.toLocaleDateString('es-ES', { weekday: 'long' }), // Día
-                    'entry.1000004': totalHoras, // Total Horas
-                    'entry.1000005': formData.operarios.length, // Num Operarios
-                    'entry.1000006': formData.operarios.map(op => `${op.nombre}: ${op.horas}h`).join(', '), // Personal
-                    'entry.1000007': formData.trabajosRealizados, // Trabajos
-                    'entry.1000008': formData.materialesUtilizados, // Materiales
-                    'entry.1000009': formData.incidencias || 'Sin incidencias', // Incidencias
-                    'entry.1000010': formData.observaciones || 'Sin observaciones', // Observaciones
-                    'entry.1000011': formData.tareasPendientes || 'Sin tareas pendientes', // Tareas Pendientes
-                    'entry.1000012': totalHoras >= 8 ? 'ÓPTIMA' : totalHoras >= 6 ? 'BUENA' : 'REGULAR', // Eficiencia
-                    'entry.1000013': formData.incidencias ? 'CON INCIDENCIAS' : 'COMPLETADO', // Estado
-                    'entry.1000014': formData.albaranes.length, // Albaranes (en lugar de Fecha Generación)
-                    'entry.1000015': formData.imagenes.length // Num Imágenes
+                    'entry.1000003': totalHoras, // Total de Horas
+                    'entry.1000004': formData.operarios.length, // Num Operarios
+                    'entry.1000005': formData.operarios.map(op => `${op.nombre}: ${op.horas}h`).join(', '), // Nombre de Operarios
+                    'entry.1000006': formData.trabajosRealizados, // Trabajos Realizados
+                    'entry.1000007': formData.materialesUtilizados, // Materiales
+                    'entry.1000008': formData.incidencias || '', // Incidentes
+                    'entry.1000009': formData.observaciones || '', // Observaciones
+                    'entry.1000010': formData.tareasPendientes || '', // Tareas Pendientes
+                    'entry.1000011': formData.imagenes.length, // Imagenes
+                    'entry.1000012': formData.albaranes.length // Albaranes
                 };
 
                 // Añadir campos al formulario
@@ -2288,23 +2285,20 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                                         form.target = '_blank'; // Abrir en nueva pestaña para ver resultado
                                                         form.style.display = 'none';
 
-                                                        // Datos de prueba usando entry IDs genéricos
+                                                        // Datos de prueba usando las 12 columnas exactas
                                                         const testFields = {
-                                                            'entry.1000001': 'TEST - Prueba de conexión',
-                                                            'entry.1000002': new Date().toISOString().split('T')[0],
-                                                            'entry.1000003': new Date().toLocaleDateString('es-ES', { weekday: 'long' }),
-                                                            'entry.1000004': '8',
-                                                            'entry.1000005': '1',
-                                                            'entry.1000006': 'Usuario Test: 8h',
-                                                            'entry.1000007': 'Prueba de conexión con Google Forms',
-                                                            'entry.1000008': 'Ninguno',
-                                                            'entry.1000009': 'Sin incidencias',
-                                                            'entry.1000010': 'Prueba realizada desde configuración',
-                                                            'entry.1000011': 'Sin tareas pendientes',
-                                                            'entry.1000012': 'ÓPTIMA',
-                                                            'entry.1000013': 'COMPLETADO',
-                                                            'entry.1000014': '0',
-                                                            'entry.1000015': '0'
+                                                            'entry.1000001': 'TEST - Prueba de conexión', // Proyecto
+                                                            'entry.1000002': new Date().toISOString().split('T')[0], // Fecha
+                                                            'entry.1000003': '8', // Total de Horas
+                                                            'entry.1000004': '1', // Num Operarios
+                                                            'entry.1000005': 'Usuario Test: 8h', // Nombre de Operarios
+                                                            'entry.1000006': 'Prueba de conexión con Google Forms', // Trabajos Realizados
+                                                            'entry.1000007': 'Ninguno', // Materiales
+                                                            'entry.1000008': '', // Incidentes
+                                                            'entry.1000009': 'Prueba realizada desde configuración', // Observaciones
+                                                            'entry.1000010': '', // Tareas Pendientes
+                                                            'entry.1000011': '0', // Imagenes
+                                                            'entry.1000012': '0' // Albaranes
                                                         };
 
                                                         // Añadir campos al formulario
@@ -2342,22 +2336,19 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
 
 1️⃣ Ve a Google Forms (forms.google.com)
 2️⃣ Crea un nuevo formulario llamado "Partes Diarios de Trabajo"
-3️⃣ Añade EXACTAMENTE estos 15 campos (todos como "Respuesta corta"):
+3️⃣ Añade EXACTAMENTE estos 12 campos (todos como "Respuesta corta"):
    • Proyecto
    • Fecha
-   • Día de la Semana
-   • Total Horas
-   • Número de Operarios
-   • Personal
+   • Total de Horas
+   • Num Operarios
+   • Nombre de Operarios
    • Trabajos Realizados
    • Materiales
-   • Incidencias
+   • Incidentes
    • Observaciones
    • Tareas Pendientes
-   • Eficiencia
-   • Estado
+   • Imagenes
    • Albaranes
-   • Número de Imágenes
 
 4️⃣ Haz clic en los 3 puntos → "Obtener enlace rellenado previamente"
 5️⃣ Rellena CUALQUIER valor en TODOS los campos (importante: no dejes ninguno vacío)
