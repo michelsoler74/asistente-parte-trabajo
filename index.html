@@ -1721,30 +1721,27 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                         type="file"
                                         multiple
                                         accept="image/*"
-                                        onChange={(e) => {
+                                        onChange={async (e) => {
                                             const files = Array.from(e.target.files);
-                                            const processFiles = async () => {
-                                                const base64Images = [];
+                                            const base64Images = [];
 
-                                                for (const file of files) {
-                                                    try {
-                                                        const base64 = await convertToBase64(file);
-                                                        base64Images.push({
-                                                            name: file.name,
-                                                            data: base64,
-                                                            size: file.size,
-                                                            type: 'albaran'
-                                                        });
-                                                    } catch (error) {
-                                                        console.error('Error converting file:', error);
-                                                    }
+                                            for (const file of files) {
+                                                try {
+                                                    const base64 = await convertToBase64(file);
+                                                    base64Images.push({
+                                                        name: file.name,
+                                                        data: base64,
+                                                        size: file.size,
+                                                        type: 'albaran'
+                                                    });
+                                                } catch (error) {
+                                                    console.error('Error converting file:', error);
                                                 }
+                                            }
 
-                                                if (base64Images.length > 0) {
-                                                    handleInputChange('albaranes', [...formData.albaranes, ...base64Images]);
-                                                }
-                                            };
-                                            processFiles();
+                                            if (base64Images.length > 0) {
+                                                handleInputChange('albaranes', [...formData.albaranes, ...base64Images]);
+                                            }
                                         }}
                                         className="w-full px-4 py-3 border-2 border-dashed border-green-300 rounded-lg hover:border-green-500 focus:border-green-500 focus:ring-2 focus:ring-green-200"
                                     />
