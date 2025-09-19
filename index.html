@@ -1732,14 +1732,14 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                     <div className="mt-4 text-center">
                                         <button
                                             onClick={() => {
-                                                setFormData(prev => ({
-                                                    ...prev,
-                                                    albaranes: [...prev.albaranes, {
-                                                        name: `Albarán_${Date.now()}.jpg`,
-                                                        data: 'placeholder',
-                                                        type: 'albaran'
-                                                    }]
-                                                }));
+                                                const newAlbaran = {
+                                                    name: `Albarán_${Date.now()}.jpg`,
+                                                    data: 'placeholder',
+                                                    type: 'albaran'
+                                                };
+                                                const currentAlbaranes = formData.albaranes || [];
+                                                const newAlbaranes = [...currentAlbaranes, newAlbaran];
+                                                setFormData({...formData, albaranes: newAlbaranes});
                                             }}
                                             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                                         >
@@ -1787,7 +1787,7 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                             <div className="text-gray-600">Imágenes</div>
                                         </div>
                                         <div className="text-center">
-                                            <div className="font-bold text-lg text-green-600">{formData.albaranes.length}</div>
+                                            <div className="font-bold text-lg text-green-600">{formData.albaranes?.length || 0}</div>
                                             <div className="text-gray-600">Albaranes</div>
                                         </div>
                                     </div>
@@ -1801,7 +1801,7 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                         📄 Descargar HTML/PDF
                                     </button>
                                     <button
-                                        onClick={exportToGoogleForms}
+                                        onClick={sendToGoogleForms}
                                         className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center justify-center gap-2"
                                     >
                                         📊 Enviar a Google Forms
