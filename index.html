@@ -1724,27 +1724,30 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                         type="file"
                                         multiple
                                         accept="image/*"
-                                        onChange={async (e) => {
+                                        onChange={(e) => {
                                             const files = Array.from(e.target.files);
-                                            const base64Images = [];
+                                            const processFiles = async () => {
+                                                const base64Images = [];
 
-                                            for (const file of files) {
-                                                try {
-                                                    const base64 = await convertToBase64(file);
-                                                    base64Images.push({
-                                                        name: file.name,
-                                                        data: base64,
-                                                        size: file.size,
-                                                        type: 'albaran'
-                                                    });
-                                                } catch (error) {
-                                                    console.error('Error converting file:', error);
+                                                for (const file of files) {
+                                                    try {
+                                                        const base64 = await convertToBase64(file);
+                                                        base64Images.push({
+                                                            name: file.name,
+                                                            data: base64,
+                                                            size: file.size,
+                                                            type: 'albaran'
+                                                        });
+                                                    } catch (error) {
+                                                        console.error('Error converting file:', error);
+                                                    }
                                                 }
-                                            }
 
-                                            if (base64Images.length > 0) {
-                                                handleInputChange('albaranes', [...formData.albaranes, ...base64Images]);
-                                            }
+                                                if (base64Images.length > 0) {
+                                                    handleInputChange('albaranes', [...formData.albaranes, ...base64Images]);
+                                                }
+                                            };
+                                            processFiles();
                                         }}
                                         className="w-full px-4 py-3 border-2 border-dashed border-green-300 rounded-lg hover:border-green-500 focus:border-green-500 focus:ring-2 focus:ring-green-200"
                                     />
@@ -2053,153 +2056,6 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                             Los partes más antiguos se eliminarán automáticamente al superar este límite
                                         </p>
 
-                                        {/* Configuración Google Sheets */}
-                                        <div className="border-t pt-4">
-                                            <h5 className="font-semibold mb-2 text-green-700">📊 Google Sheets Integration</h5>
-                                            <div className="space-y-2">
-                                                <label className="text-sm text-gray-700">URL de Google Apps Script:</label>
-                                                <input
-                                                    type="url"
-                                                    value={googleSheetsUrl}
-                                                    onChange={(e) => saveGoogleSheetsUrl(e.target.value)}
-                                                    placeholder="https://script.google.com/macros/s/..."
-                                                    className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-green-500 text-sm"
-                                                />
-                                                <p className="text-xs text-gray-500">
-                                                    ✅ Configura tu Google Apps Script para envío automático
-                                                </p>
-                                                {googleSheetsUrl && (
-                                                    <div className="bg-green-50 p-2 rounded text-xs text-green-700">
-                                                        ✅ URL configurada - Los partes se enviarán automáticamente
-                                                    </div>
-                                                )}
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={async () => {
-                                                            if (!googleSheetsUrl.trim()) {
-                                                                alert('⚠️ Primero configura la URL de Google Apps Script');
-                                                                return;
-                                                            }
-
-                                                            const testData = {
-                                                                proyecto: 'TEST - Prueba de conexión',
-                                                                fecha: new Date().toISOString().split('T')[0],
-                                                                diaSemana: 'Prueba',
-                                                                totalHoras: 8,
-                                                                numOperarios: 1,
-                                                                tieneIncidencias: 'NO',
-                                                                numImagenes: 0,
-                                                                operarios: [{ nombre: 'Usuario Test', horas: 8 }],
-                                                                trabajosRealizados: 'Prueba de conexión con Google Sheets',
-                                                                materialesUtilizados: 'Ninguno',
-                                                                observaciones: '',
-                                                                tareasPendientes: '',
-                                                                fechaGeneracion: new Date().toLocaleString('es-ES'),
-                                                                eficiencia: 'PRUEBA',
-                                                                estado: 'TEST',
-                                                                complejidad: 'BAJA'
-                                                            };
-
-                                                            try {
-                                                                const response = await fetch(googleSheetsUrl, {
-                                                                    method: 'POST',
-                                                                    mode: 'no-cors',
-                                                                    headers: { 'Content-Type': 'application/json' },
-                                                                    body: JSON.stringify(testData)
-                                                                });
-
-                                                                // Con no-cors mode, si llegamos aquí sin error, significa que funcionó
-                                                                alert('✅ ¡Conexión enviada!\\n\\nVerifica tu Google Sheet para confirmar que aparezca una fila de prueba con "TEST - Prueba de conexión".');
-                                                            } catch (error) {
-                                                                alert(`❌ Error de conexión\\n\\n${error.message}\\n\\nVerifica la URL y configuración del Apps Script`);
-                                                            }
-                                                        }}
-                                                        className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
-                                                        disabled={!googleFormsUrl.trim()}
-                                                    >
-                                                        🧪 Probar conexión
-                                                    </button>
-                                                    <button
-                                                        onClick={() => {
-                                                            const instructions = `
-🚀 CÓMO CONFIGURAR GOOGLE FORMS INTEGRATION
-
-📋 PASOS RÁPIDOS:
-
-1️⃣ Abre Google Sheets y crea una nueva hoja
-2️⃣ Ve a "Extensiones" → "Apps Script"
-3️⃣ Borra todo y pega este código:
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-function doPost(e) {
-  try {
-    const data = JSON.parse(e.postData.contents);
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-
-    // Crear headers si es la primera vez
-    if (sheet.getLastRow() === 0) {
-      sheet.getRange(1, 1, 1, 15).setValues([[
-        'Fecha', 'Proyecto', 'Día', 'Total Horas', 'Operarios',
-        'Incidencias', 'Imágenes', 'Personal', 'Trabajos', 'Materiales',
-        'Observaciones', 'Tareas Pendientes', 'Eficiencia', 'Estado', 'Generado'
-      ]]);
-      sheet.getRange(1, 1, 1, 15).setFontWeight('bold');
-    }
-
-    // Añadir nueva fila
-    const newRow = [
-      data.fecha,
-      data.proyecto,
-      data.diaSemana,
-      data.totalHoras,
-      data.numOperarios,
-      data.tieneIncidencias,
-      data.numImagenes,
-      data.operarios.map(op => op.nombre + ': ' + op.horas + 'h').join(', '),
-      data.trabajosRealizados.substring(0, 200),
-      data.materialesUtilizados.substring(0, 100),
-      data.observaciones.substring(0, 100),
-      data.tareasPendientes.substring(0, 100),
-      data.eficiencia,
-      data.estado,
-      data.fechaGeneracion
-    ];
-
-    sheet.appendRow(newRow);
-
-    return ContentService
-      .createTextOutput('Success')
-      .setMimeType(ContentService.MimeType.TEXT);
-
-  } catch (error) {
-    return ContentService
-      .createTextOutput('Error: ' + error.toString())
-      .setMimeType(ContentService.MimeType.TEXT);
-  }
-}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-4️⃣ Guarda el proyecto (Ctrl+S)
-5️⃣ Haz clic en "Implementar" → "Nueva implementación"
-6️⃣ Tipo: "Aplicación web"
-7️⃣ Ejecutar como: "Yo"
-8️⃣ Acceso: "Cualquier persona"
-9️⃣ Copia la URL que aparece
-🔟 Pégala arriba en el campo "URL de Google Apps Script"
-
-✅ ¡Listo! Ahora tus partes se guardarán automáticamente en Sheets
-                                                        `;
-                                                        alert(instructions);
-                                                    }}
-                                                    className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
-                                                >
-                                                    📖 Ver instrucciones completas
-                                                </button>
-                                                </div>
-                                            </div>
-                                        </div>
                                     </div>
 
                                     {/* Acciones de limpieza */}
@@ -2420,8 +2276,8 @@ function doPost(e) {
                                             <div className="flex gap-3">
                                                 <button
                                                     onClick={async () => {
-                                                        if (!googleSheetsUrl.trim()) {
-                                                            alert('⚠️ Primero configura la URL de Google Apps Script');
+                                                        if (!googleFormsUrl.trim()) {
+                                                            alert('⚠️ Primero configura la URL de Google Forms');
                                                             return;
                                                         }
 
@@ -2445,7 +2301,7 @@ function doPost(e) {
                                                         };
 
                                                         try {
-                                                            const response = await fetch(googleSheetsUrl, {
+                                                            const response = await fetch(googleFormsUrl, {
                                                                 method: 'POST',
                                                                 headers: { 'Content-Type': 'application/json' },
                                                                 body: JSON.stringify(testData)
@@ -2457,11 +2313,11 @@ function doPost(e) {
                                                                 throw new Error(`HTTP ${response.status}`);
                                                             }
                                                         } catch (error) {
-                                                            alert(`❌ Error de conexión\\n\\n${error.message}\\n\\nVerifica la URL y configuración del Apps Script`);
+                                                            alert(`❌ Error de conexión\\n\\n${error.message}\\n\\nVerifica la URL y configuración de Google Forms`);
                                                         }
                                                     }}
                                                     className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300"
-                                                    disabled={!googleSheetsUrl.trim()}
+                                                    disabled={!googleFormsUrl.trim()}
                                                 >
                                                     🧪 Probar conexión
                                                 </button>
@@ -2473,70 +2329,28 @@ function doPost(e) {
 
 📋 PASOS RÁPIDOS:
 
-1️⃣ Abre Google Sheets y crea una nueva hoja
-2️⃣ Ve a "Extensiones" → "Apps Script"
-3️⃣ Borra todo y pega este código:
+1️⃣ Ve a Google Forms (forms.google.com)
+2️⃣ Crea un nuevo formulario
+3️⃣ Añade los siguientes campos (todos como "Respuesta corta"):
+   • Proyecto
+   • Fecha
+   • Total Horas
+   • Operarios
+   • Trabajos Realizados
+   • Materiales
+   • Incidencias
+   • Observaciones
+   • Tareas Pendientes
+   • Albaranes
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4️⃣ Haz clic en los 3 puntos → "Obtener enlace rellenado previamente"
+5️⃣ Rellena cualquier valor en todos los campos
+6️⃣ Haz clic en "Obtener enlace"
+7️⃣ Copia la URL que aparece
+8️⃣ Cambia "viewform" por "formResponse" en la URL
+9️⃣ Pega esa URL arriba en el campo de configuración
 
-function doPost(e) {
-  try {
-    const data = JSON.parse(e.postData.contents);
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-
-    // Crear headers si es la primera vez
-    if (sheet.getLastRow() === 0) {
-      sheet.getRange(1, 1, 1, 15).setValues([[
-        'Fecha', 'Proyecto', 'Día', 'Total Horas', 'Operarios',
-        'Incidencias', 'Imágenes', 'Personal', 'Trabajos', 'Materiales',
-        'Observaciones', 'Tareas Pendientes', 'Eficiencia', 'Estado', 'Generado'
-      ]]);
-      sheet.getRange(1, 1, 1, 15).setFontWeight('bold');
-    }
-
-    // Añadir nueva fila
-    const newRow = [
-      data.fecha,
-      data.proyecto,
-      data.diaSemana,
-      data.totalHoras,
-      data.numOperarios,
-      data.tieneIncidencias,
-      data.numImagenes,
-      data.operarios.map(op => op.nombre + ': ' + op.horas + 'h').join(', '),
-      data.trabajosRealizados.substring(0, 200),
-      data.materialesUtilizados.substring(0, 100),
-      data.observaciones.substring(0, 100),
-      data.tareasPendientes.substring(0, 100),
-      data.eficiencia,
-      data.estado,
-      data.fechaGeneracion
-    ];
-
-    sheet.appendRow(newRow);
-
-    return ContentService
-      .createTextOutput('Success')
-      .setMimeType(ContentService.MimeType.TEXT);
-
-  } catch (error) {
-    return ContentService
-      .createTextOutput('Error: ' + error.toString())
-      .setMimeType(ContentService.MimeType.TEXT);
-  }
-}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-4️⃣ Guarda el proyecto (Ctrl+S)
-5️⃣ Haz clic en "Implementar" → "Nueva implementación"
-6️⃣ Tipo: "Aplicación web"
-7️⃣ Ejecutar como: "Yo"
-8️⃣ Acceso: "Cualquier persona"
-9️⃣ Copia la URL que aparece
-🔟 Pégala arriba en el campo "URL de Google Apps Script"
-
-✅ ¡Listo! Ahora tus partes se guardarán automáticamente en Sheets
+✅ ¡Listo! Ahora tus partes se enviarán automáticamente a Google Forms
                                                         `;
                                                         alert(instructions);
                                                     }}
