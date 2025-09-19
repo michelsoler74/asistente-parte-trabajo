@@ -308,10 +308,9 @@
                     // Debug alert temporal
                     alert(`🐛 DEBUG:\\n\\nImágenes: ${dataToSend.imagenes.length}\\nAlbaranes: ${dataToSend.albaranes.length}\\n\\nFormData original:\\nImágenes: ${(formData.imagenes || []).length}\\nAlbaranes: ${(formData.albaranes || []).length}`);
 
-                    // Enviar datos
+                    // Enviar datos (sin no-cors para permitir POST correcto)
                     const response = await fetch(sheetsUrl, {
                         method: 'POST',
-                        mode: 'no-cors',
                         headers: {
                             'Content-Type': 'application/json',
                         },
