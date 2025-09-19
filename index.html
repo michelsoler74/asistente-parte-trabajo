@@ -1721,27 +1721,27 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                         type="file"
                                         multiple
                                         accept="image/*"
-                                        onChange={async (e) => {
+                                        onChange={(e) => {
                                             const files = Array.from(e.target.files);
-                                            const base64Images = [];
+                                            if (files.length === 0) return;
 
-                                            for (const file of files) {
-                                                try {
-                                                    const base64 = await convertToBase64(file);
-                                                    base64Images.push({
+                                            files.forEach(file => {
+                                                const reader = new FileReader();
+                                                reader.onload = (event) => {
+                                                    const newAlbaran = {
                                                         name: file.name,
-                                                        data: base64,
+                                                        data: event.target.result,
                                                         size: file.size,
                                                         type: 'albaran'
-                                                    });
-                                                } catch (error) {
-                                                    console.error('Error converting file:', error);
-                                                }
-                                            }
+                                                    };
 
-                                            if (base64Images.length > 0) {
-                                                handleInputChange('albaranes', [...formData.albaranes, ...base64Images]);
-                                            }
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        albaranes: [...prev.albaranes, newAlbaran]
+                                                    }));
+                                                };
+                                                reader.readAsDataURL(file);
+                                            });
                                         }}
                                         className="w-full px-4 py-3 border-2 border-dashed border-green-300 rounded-lg hover:border-green-500 focus:border-green-500 focus:ring-2 focus:ring-green-200"
                                     />
