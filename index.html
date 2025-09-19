@@ -302,6 +302,11 @@
                     };
 
                     console.log('📊 ENVIANDO A GOOGLE SHEETS:', dataToSend);
+                    console.log('🖼️ IMÁGENES ENVIADAS:', dataToSend.imagenes.length, dataToSend.imagenes);
+                    console.log('📄 ALBARANES ENVIADOS:', dataToSend.albaranes.length, dataToSend.albaranes);
+
+                    // Debug alert temporal
+                    alert(`🐛 DEBUG:\\n\\nImágenes: ${dataToSend.imagenes.length}\\nAlbaranes: ${dataToSend.albaranes.length}\\n\\nFormData original:\\nImágenes: ${(formData.imagenes || []).length}\\nAlbaranes: ${(formData.albaranes || []).length}`);
 
                     // Enviar datos
                     const response = await fetch(sheetsUrl, {
