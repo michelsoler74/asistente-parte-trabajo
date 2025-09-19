@@ -122,6 +122,9 @@
                 resumenInteligente: ''
             });
 
+            // Estado para configuración Google Sheets
+            const [googleSheetsUrl, setGoogleSheetsUrl] = useState('');
+
             // Cargar datos guardados al inicializar
             useEffect(() => {
                 loadSavedData();
@@ -139,6 +142,11 @@
                 const savedLimit = localStorage.getItem('partes_limit');
                 if (savedLimit) {
                     setMaxPartesLimit(parseInt(savedLimit));
+                }
+
+                const savedGoogleSheetsUrl = localStorage.getItem('google_sheets_url');
+                if (savedGoogleSheetsUrl) {
+                    setGoogleSheetsUrl(savedGoogleSheetsUrl);
                 }
             };
 
@@ -252,6 +260,96 @@
                     if (eliminated > 0) {
                         alert(`⚙️ Configuración guardada. Se eliminaron ${eliminated} partes antiguos para ajustarse al nuevo límite.`);
                     }
+                }
+            };
+
+            const saveGoogleSheetsUrl = (url) => {
+                setGoogleSheetsUrl(url);
+                localStorage.setItem('google_sheets_url', url);
+            };
+
+            // Función para enviar datos directamente a Google Sheets
+            const sendToGoogleSheets = async () => {
+                if (!googleSheetsUrl.trim()) {
+                    alert('⚠️ No hay URL de Google Sheets configurada\\n\\nVe a Configuración → Google Sheets para añadir tu URL de Apps Script');
+                    return false;
+                }
+
+                const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
+                const fecha = new Date(formData.fecha);
+
+                // Preparar los datos en formato que Google Sheets puede procesar
+                const sheetData = {
+                    // Información general
+                    proyecto: formData.nombreTrabajo,
+                    fecha: formData.fecha,
+                    diaSemana: fecha.toLocaleDateString('es-ES', { weekday: 'long' }),
+                    totalHoras: totalHoras,
+                    numOperarios: formData.operarios.length,
+                    tieneIncidencias: formData.incidencias ? 'SÍ' : 'NO',
+                    numImagenes: formData.imagenes.length,
+
+                    // Personal y horas
+                    operarios: formData.operarios.map((op, index) => ({
+                        numero: index + 1,
+                        nombre: op.nombre,
+                        horas: parseFloat(op.horas) || 0,
+                        porcentaje: totalHoras > 0 ? ((parseFloat(op.horas) || 0) / totalHoras * 100).toFixed(1) + '%' : '0%'
+                    })),
+
+                    // Descripciones
+                    trabajosRealizados: formData.trabajosRealizados,
+                    materialesUtilizados: formData.materialesUtilizados,
+                    incidencias: formData.incidencias || '',
+                    observaciones: formData.observaciones || '',
+                    tareasPendientes: formData.tareasPendientes || '',
+
+                    // Metadatos
+                    fechaGeneracion: new Date().toLocaleString('es-ES'),
+                    resumenInteligente: formData.resumenInteligente || '',
+
+                    // Estadísticas calculadas
+                    promedioHoras: (totalHoras / formData.operarios.length).toFixed(1),
+                    eficiencia: totalHoras >= 8 ? 'ÓPTIMA' : totalHoras >= 6 ? 'BUENA' : totalHoras >= 4 ? 'REGULAR' : 'BAJA',
+                    estado: formData.incidencias ? 'CON INCIDENCIAS' : 'COMPLETADO',
+                    complejidad: totalHoras > 12 ? 'ALTA' : totalHoras > 8 ? 'MEDIA' : 'BAJA'
+                };
+
+                try {
+                    // Mostrar indicador de carga
+                    const loadingAlert = document.createElement('div');
+                    loadingAlert.innerHTML = `
+                        <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                    background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                                    z-index: 10000; text-align: center;">
+                            <div style="font-size: 18px; margin-bottom: 10px;">📊 Enviando a Google Sheets...</div>
+                            <div style="font-size: 14px; color: #666;">Por favor espera</div>
+                        </div>
+                    `;
+                    document.body.appendChild(loadingAlert);
+
+                    const response = await fetch(googleSheetsUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(sheetData)
+                    });
+
+                    document.body.removeChild(loadingAlert);
+
+                    if (response.ok) {
+                        const result = await response.text();
+                        alert('✅ ¡Datos enviados exitosamente a Google Sheets!\\n\\n📊 El parte diario se ha registrado correctamente en tu hoja de cálculo.');
+                        return true;
+                    } else {
+                        throw new Error(`Error HTTP: ${response.status}`);
+                    }
+                } catch (error) {
+                    document.querySelector('[style*="position: fixed"]')?.remove();
+                    console.error('Error enviando a Google Sheets:', error);
+                    alert(`❌ Error al enviar a Google Sheets\\n\\n${error.message}\\n\\nVerifica que:\\n• La URL del Apps Script sea correcta\\n• El script esté desplegado como "web app"\\n• Tengas permisos de escritura`);
+                    return false;
                 }
             };
 
@@ -1118,6 +1216,15 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                 alert('📄 PDF Profesional generado como HTML\\n\\n✅ Para convertir a PDF:\\n1. Abre el archivo HTML descargado\\n2. Ctrl+P (Imprimir)\\n3. Selecciona "Guardar como PDF"\\n4. ¡Listo! Tendrás un PDF profesional');
             };
 
+            const exportToGoogleSheets = async () => {
+                // Enviar a Google Sheets en lugar de descargar CSV
+                const success = await sendToGoogleSheets();
+                if (success) {
+                    // También guardamos en el historial local
+                    saveCurrentParte();
+                }
+            };
+
             const exportToCSV = () => {
                 const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
                 const fecha = new Date(formData.fecha);
@@ -1646,10 +1753,10 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                         📄 Descargar HTML/PDF
                                     </button>
                                     <button
-                                        onClick={exportToCSV}
+                                        onClick={exportToGoogleSheets}
                                         className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center justify-center gap-2"
                                     >
-                                        📊 Descargar CSV
+                                        📊 Enviar a Google Sheets
                                     </button>
                                 </div>
 
@@ -1843,7 +1950,7 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                     {/* Configuración de límite */}
                                     <div className="bg-gray-50 p-4 rounded-lg">
                                         <h4 className="font-semibold mb-3">⚙️ Configuración</h4>
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-3 mb-4">
                                             <label className="text-sm">Máximo partes a mantener:</label>
                                             <select
                                                 value={maxPartesLimit}
@@ -1857,9 +1964,159 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                                 <option value={200}>200 partes</option>
                                             </select>
                                         </div>
-                                        <p className="text-xs text-gray-500 mt-2">
+                                        <p className="text-xs text-gray-500 mb-4">
                                             Los partes más antiguos se eliminarán automáticamente al superar este límite
                                         </p>
+
+                                        {/* Configuración Google Sheets */}
+                                        <div className="border-t pt-4">
+                                            <h5 className="font-semibold mb-2 text-green-700">📊 Google Sheets Integration</h5>
+                                            <div className="space-y-2">
+                                                <label className="text-sm text-gray-700">URL de Google Apps Script:</label>
+                                                <input
+                                                    type="url"
+                                                    value={googleSheetsUrl}
+                                                    onChange={(e) => saveGoogleSheetsUrl(e.target.value)}
+                                                    placeholder="https://script.google.com/macros/s/..."
+                                                    className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-green-500 text-sm"
+                                                />
+                                                <p className="text-xs text-gray-500">
+                                                    ✅ Configura tu Google Apps Script para envío automático
+                                                </p>
+                                                {googleSheetsUrl && (
+                                                    <div className="bg-green-50 p-2 rounded text-xs text-green-700">
+                                                        ✅ URL configurada - Los partes se enviarán automáticamente
+                                                    </div>
+                                                )}
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (!googleSheetsUrl.trim()) {
+                                                                alert('⚠️ Primero configura la URL de Google Apps Script');
+                                                                return;
+                                                            }
+
+                                                            const testData = {
+                                                                proyecto: 'TEST - Prueba de conexión',
+                                                                fecha: new Date().toISOString().split('T')[0],
+                                                                diaSemana: 'Prueba',
+                                                                totalHoras: 8,
+                                                                numOperarios: 1,
+                                                                tieneIncidencias: 'NO',
+                                                                numImagenes: 0,
+                                                                operarios: [{ nombre: 'Usuario Test', horas: 8 }],
+                                                                trabajosRealizados: 'Prueba de conexión con Google Sheets',
+                                                                materialesUtilizados: 'Ninguno',
+                                                                observaciones: '',
+                                                                tareasPendientes: '',
+                                                                fechaGeneracion: new Date().toLocaleString('es-ES'),
+                                                                eficiencia: 'PRUEBA',
+                                                                estado: 'TEST',
+                                                                complejidad: 'BAJA'
+                                                            };
+
+                                                            try {
+                                                                const response = await fetch(googleSheetsUrl, {
+                                                                    method: 'POST',
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify(testData)
+                                                                });
+
+                                                                if (response.ok) {
+                                                                    alert('✅ ¡Conexión exitosa!\\n\\nSe ha enviado un registro de prueba a tu Google Sheet. Verifica que aparezca correctamente.');
+                                                                } else {
+                                                                    throw new Error(`HTTP ${response.status}`);
+                                                                }
+                                                            } catch (error) {
+                                                                alert(`❌ Error de conexión\\n\\n${error.message}\\n\\nVerifica la URL y configuración del Apps Script`);
+                                                            }
+                                                        }}
+                                                        className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
+                                                        disabled={!googleSheetsUrl.trim()}
+                                                    >
+                                                        🧪 Probar conexión
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            const instructions = `
+🚀 CÓMO CONFIGURAR GOOGLE SHEETS INTEGRATION
+
+📋 PASOS RÁPIDOS:
+
+1️⃣ Abre Google Sheets y crea una nueva hoja
+2️⃣ Ve a "Extensiones" → "Apps Script"
+3️⃣ Borra todo y pega este código:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+
+    // Crear headers si es la primera vez
+    if (sheet.getLastRow() === 0) {
+      sheet.getRange(1, 1, 1, 15).setValues([[
+        'Fecha', 'Proyecto', 'Día', 'Total Horas', 'Operarios',
+        'Incidencias', 'Imágenes', 'Personal', 'Trabajos', 'Materiales',
+        'Observaciones', 'Tareas Pendientes', 'Eficiencia', 'Estado', 'Generado'
+      ]]);
+      sheet.getRange(1, 1, 1, 15).setFontWeight('bold');
+    }
+
+    // Añadir nueva fila
+    const newRow = [
+      data.fecha,
+      data.proyecto,
+      data.diaSemana,
+      data.totalHoras,
+      data.numOperarios,
+      data.tieneIncidencias,
+      data.numImagenes,
+      data.operarios.map(op => op.nombre + ': ' + op.horas + 'h').join(', '),
+      data.trabajosRealizados.substring(0, 200),
+      data.materialesUtilizados.substring(0, 100),
+      data.observaciones.substring(0, 100),
+      data.tareasPendientes.substring(0, 100),
+      data.eficiencia,
+      data.estado,
+      data.fechaGeneracion
+    ];
+
+    sheet.appendRow(newRow);
+
+    return ContentService
+      .createTextOutput('Success')
+      .setMimeType(ContentService.MimeType.TEXT);
+
+  } catch (error) {
+    return ContentService
+      .createTextOutput('Error: ' + error.toString())
+      .setMimeType(ContentService.MimeType.TEXT);
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+4️⃣ Guarda el proyecto (Ctrl+S)
+5️⃣ Haz clic en "Implementar" → "Nueva implementación"
+6️⃣ Tipo: "Aplicación web"
+7️⃣ Ejecutar como: "Yo"
+8️⃣ Acceso: "Cualquier persona"
+9️⃣ Copia la URL que aparece
+🔟 Pégala arriba en el campo "URL de Google Apps Script"
+
+✅ ¡Listo! Ahora tus partes se guardarán automáticamente en Sheets
+                                                        `;
+                                                        alert(instructions);
+                                                    }}
+                                                    className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
+                                                >
+                                                    📖 Ver instrucciones completas
+                                                </button>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     {/* Acciones de limpieza */}
