@@ -921,6 +921,12 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                 }
 
                 if (currentStep === 8) {
+                    // En el paso de albaranes, generar resumen para el siguiente paso
+                    generateResumen();
+                }
+
+                if (currentStep === 9) {
+                    // En el resumen final, aquí es donde se guarda
                     if (!canFinishParte()) {
                         alert('⚠️ No se puede finalizar el parte.\\n\\nVerifica que tengas:\\n• Nombre del trabajo\\n• Al menos un operario con nombre y horas');
                         return;
