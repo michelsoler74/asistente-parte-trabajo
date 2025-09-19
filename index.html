@@ -1726,29 +1726,72 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                     <p className="text-center text-blue-800 mb-3">
                                         📄 Sección de Albaranes
                                     </p>
-                                    <p className="text-center text-sm text-blue-600">
-                                        Funcionalidad de subida de fotos se implementará pronto.
-                                    </p>
                                     <div className="mt-4 text-center">
-                                        <button
-                                            onClick={() => {
-                                                const newAlbaran = {
-                                                    name: `Albarán_${Date.now()}.jpg`,
-                                                    data: 'placeholder',
-                                                    type: 'albaran'
-                                                };
-                                                const currentAlbaranes = formData.albaranes || [];
-                                                const newAlbaranes = [...currentAlbaranes, newAlbaran];
-                                                setFormData({...formData, albaranes: newAlbaranes});
+                                        <input
+                                            type="file"
+                                            multiple
+                                            accept="image/*"
+                                            onChange={(e) => {
+                                                const files = Array.from(e.target.files);
+                                                files.forEach(file => {
+                                                    const reader = new FileReader();
+                                                    reader.onload = (event) => {
+                                                        const newAlbaran = {
+                                                            name: file.name,
+                                                            url: event.target.result,
+                                                            type: 'albaran'
+                                                        };
+                                                        const currentAlbaranes = formData.albaranes || [];
+                                                        const newAlbaranes = [...currentAlbaranes, newAlbaran];
+                                                        setFormData({...formData, albaranes: newAlbaranes});
+                                                    };
+                                                    reader.readAsDataURL(file);
+                                                });
+                                                e.target.value = '';
                                             }}
-                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                            id="albaranUpload"
+                                            className="hidden"
+                                        />
+                                        <label
+                                            htmlFor="albaranUpload"
+                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer inline-block"
                                         >
-                                            + Añadir Albarán (Simulado)
-                                        </button>
+                                            📄 + Añadir Albaranes
+                                        </label>
                                     </div>
                                     <p className="text-center text-sm text-blue-600 mt-3">
                                         Total albaranes: {formData.albaranes?.length || 0}
                                     </p>
+
+                                    {/* Mostrar albaranes cargados */}
+                                    {formData.albaranes && formData.albaranes.length > 0 && (
+                                        <div className="mt-4 grid grid-cols-2 gap-2">
+                                            {formData.albaranes.map((albaran, index) => (
+                                                <div key={index} className="relative border rounded-lg overflow-hidden">
+                                                    <img
+                                                        src={albaran.url}
+                                                        alt={albaran.name}
+                                                        className="w-full h-32 object-cover"
+                                                    />
+                                                    <div className="absolute top-2 right-2">
+                                                        <button
+                                                            onClick={() => {
+                                                                const newAlbaranes = formData.albaranes.filter((_, i) => i !== index);
+                                                                setFormData({...formData, albaranes: newAlbaranes});
+                                                            }}
+                                                            className="bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600"
+                                                            title="Eliminar albarán"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                    <div className="p-2 bg-gray-50">
+                                                        <p className="text-xs text-gray-600 truncate">{albaran.name}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );
