@@ -299,25 +299,29 @@
                 form.target = 'hidden_iframe';
                 form.style.display = 'none';
 
-                // Preparar los datos para Google Forms con entry IDs reales
+                // Preparar los datos para Google Forms con entry IDs reales y validación
                 const formFields = {
-                    'entry.1609146625': formData.nombreTrabajo, // Proyecto
-                    'entry.1854148894': formData.fecha, // Fecha
-                    'entry.506300148': totalHoras, // Total de Horas
-                    'entry.344006223': formData.operarios.length, // Num Operarios
-                    'entry.2113503178': formData.operarios.map(op => `${op.nombre}: ${op.horas}h`).join(', '), // Nombre de Operarios
-                    'entry.1661225070': formData.trabajosRealizados, // Trabajos Realizados
-                    'entry.610430841': formData.materialesUtilizados, // Materiales
-                    'entry.930728203': formData.incidencias || '', // Incidentes
-                    'entry.123490185': formData.observaciones || '', // Observaciones
-                    'entry.1028727727': formData.tareasPendientes || '', // Tareas Pendientes
-                    'entry.1499739742': formData.imagenes.length, // Imagenes
-                    'entry.1652758369': formData.albaranes.length // Albaranes
+                    'entry.1609146625': formData.nombreTrabajo || 'Sin especificar', // Proyecto
+                    'entry.1854148894': formData.fecha || new Date().toISOString().split('T')[0], // Fecha
+                    'entry.506300148': totalHoras.toString() || '0', // Total de Horas
+                    'entry.344006223': (formData.operarios?.length || 0).toString(), // Num Operarios
+                    'entry.2113503178': formData.operarios?.map(op => `${op.nombre || 'Sin nombre'}: ${op.horas || 0}h`).join(', ') || 'Sin operarios', // Nombre de Operarios
+                    'entry.1661225070': formData.trabajosRealizados || 'Sin especificar', // Trabajos Realizados
+                    'entry.610430841': formData.materialesUtilizados || 'Sin materiales', // Materiales
+                    'entry.930728203': formData.incidencias || 'Sin incidencias', // Incidentes
+                    'entry.123490185': formData.observaciones || 'Sin observaciones', // Observaciones
+                    'entry.1028727727': formData.tareasPendientes || 'Sin tareas pendientes', // Tareas Pendientes
+                    'entry.1499739742': (formData.imagenes?.length || 0).toString(), // Imagenes
+                    'entry.1652758369': (formData.albaranes?.length || 0).toString() // Albaranes
                 };
 
                 // Debug: Mostrar datos que se van a enviar
                 console.log('📊 DATOS ENVIANDO A GOOGLE FORMS:', formFields);
                 console.log('📊 FORM DATA COMPLETO:', formData);
+
+                // Mostrar alerta con datos para debug
+                const datosDebug = Object.entries(formFields).map(([key, value]) => `${key}: "${value}"`).join('\n');
+                alert('🐛 DEBUG - Datos enviando:\n\n' + datosDebug);
 
                 // Añadir campos al formulario
                 Object.keys(formFields).forEach(key => {
