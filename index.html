@@ -320,8 +320,15 @@
 
                     console.log('📊 ENVIANDO A GOOGLE SHEETS (GET):', params.toString());
 
+                    // URL completa para debug
+                    const fullUrl = `${sheetsUrl}?${params.toString()}`;
+                    console.log('🔗 URL COMPLETA:', fullUrl);
+
+                    // Debug: Mostrar URL para verificar
+                    alert(`🐛 DEBUG URL:\\n\\n${fullUrl.substring(0, 100)}...\\n\\n¿Esta URL se ve correcta?`);
+
                     // Enviar datos usando GET con parámetros
-                    const response = await fetch(`${sheetsUrl}?${params.toString()}`, {
+                    const response = await fetch(fullUrl, {
                         method: 'GET'
                     });
 
