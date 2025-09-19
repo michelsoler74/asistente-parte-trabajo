@@ -102,6 +102,7 @@
             const [saveStatus, setSaveStatus] = useState('saved');
             const [showHistory, setShowHistory] = useState(false);
             const [showMemoryManager, setShowMemoryManager] = useState(false);
+            const [showSettings, setShowSettings] = useState(false);
             const [memoryInfo, setMemoryInfo] = useState({ used: 0, available: 0, percentage: 0 });
             const [maxPartesLimit, setMaxPartesLimit] = useState(50);
             const [currentParteId, setCurrentParteId] = useState(null);
@@ -1804,6 +1805,12 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                         📚 Historial ({partesHistory.length})
                                     </button>
                                     <button
+                                        onClick={() => setShowSettings(true)}
+                                        className="px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm"
+                                    >
+                                        ⚙️ Configuración
+                                    </button>
+                                    <button
                                         onClick={createNewParte}
                                         className="px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm"
                                     >
@@ -2283,6 +2290,228 @@ function doPost(e) {
                                             ))}
                                         </div>
                                     )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Modal de Configuración */}
+                    {showSettings && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                                <div className="p-6 border-b">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-xl font-bold text-green-700">⚙️ Configuración del Sistema</h3>
+                                        <button
+                                            onClick={() => setShowSettings(false)}
+                                            className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                                        >
+                                            ❌
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="p-6 space-y-6">
+                                    {/* Configuración Google Sheets */}
+                                    <div className="bg-green-50 p-6 rounded-lg border-2 border-green-200">
+                                        <h4 className="font-bold mb-4 text-green-800 text-lg">📊 Google Sheets Integration</h4>
+
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    URL de Google Apps Script:
+                                                </label>
+                                                <input
+                                                    type="url"
+                                                    value={googleSheetsUrl}
+                                                    onChange={(e) => saveGoogleSheetsUrl(e.target.value)}
+                                                    placeholder="https://script.google.com/macros/s/..."
+                                                    className="w-full px-4 py-3 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                />
+                                            </div>
+
+                                            {googleSheetsUrl && (
+                                                <div className="bg-green-100 p-3 rounded-lg border border-green-300">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-green-600">✅</span>
+                                                        <span className="text-sm text-green-800 font-medium">
+                                                            URL configurada - Los partes se enviarán automáticamente
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="flex gap-3">
+                                                <button
+                                                    onClick={async () => {
+                                                        if (!googleSheetsUrl.trim()) {
+                                                            alert('⚠️ Primero configura la URL de Google Apps Script');
+                                                            return;
+                                                        }
+
+                                                        const testData = {
+                                                            proyecto: 'TEST - Prueba de conexión',
+                                                            fecha: new Date().toISOString().split('T')[0],
+                                                            diaSemana: 'Prueba',
+                                                            totalHoras: 8,
+                                                            numOperarios: 1,
+                                                            tieneIncidencias: 'NO',
+                                                            numImagenes: 0,
+                                                            operarios: [{ nombre: 'Usuario Test', horas: 8 }],
+                                                            trabajosRealizados: 'Prueba de conexión con Google Sheets',
+                                                            materialesUtilizados: 'Ninguno',
+                                                            observaciones: '',
+                                                            tareasPendientes: '',
+                                                            fechaGeneracion: new Date().toLocaleString('es-ES'),
+                                                            eficiencia: 'PRUEBA',
+                                                            estado: 'TEST',
+                                                            complejidad: 'BAJA'
+                                                        };
+
+                                                        try {
+                                                            const response = await fetch(googleSheetsUrl, {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify(testData)
+                                                            });
+
+                                                            if (response.ok) {
+                                                                alert('✅ ¡Conexión exitosa!\\n\\nSe ha enviado un registro de prueba a tu Google Sheet. Verifica que aparezca correctamente.');
+                                                            } else {
+                                                                throw new Error(`HTTP ${response.status}`);
+                                                            }
+                                                        } catch (error) {
+                                                            alert(`❌ Error de conexión\\n\\n${error.message}\\n\\nVerifica la URL y configuración del Apps Script`);
+                                                        }
+                                                    }}
+                                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300"
+                                                    disabled={!googleSheetsUrl.trim()}
+                                                >
+                                                    🧪 Probar conexión
+                                                </button>
+
+                                                <button
+                                                    onClick={() => {
+                                                        const instructions = `
+🚀 CÓMO CONFIGURAR GOOGLE SHEETS INTEGRATION
+
+📋 PASOS RÁPIDOS:
+
+1️⃣ Abre Google Sheets y crea una nueva hoja
+2️⃣ Ve a "Extensiones" → "Apps Script"
+3️⃣ Borra todo y pega este código:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+
+    // Crear headers si es la primera vez
+    if (sheet.getLastRow() === 0) {
+      sheet.getRange(1, 1, 1, 15).setValues([[
+        'Fecha', 'Proyecto', 'Día', 'Total Horas', 'Operarios',
+        'Incidencias', 'Imágenes', 'Personal', 'Trabajos', 'Materiales',
+        'Observaciones', 'Tareas Pendientes', 'Eficiencia', 'Estado', 'Generado'
+      ]]);
+      sheet.getRange(1, 1, 1, 15).setFontWeight('bold');
+    }
+
+    // Añadir nueva fila
+    const newRow = [
+      data.fecha,
+      data.proyecto,
+      data.diaSemana,
+      data.totalHoras,
+      data.numOperarios,
+      data.tieneIncidencias,
+      data.numImagenes,
+      data.operarios.map(op => op.nombre + ': ' + op.horas + 'h').join(', '),
+      data.trabajosRealizados.substring(0, 200),
+      data.materialesUtilizados.substring(0, 100),
+      data.observaciones.substring(0, 100),
+      data.tareasPendientes.substring(0, 100),
+      data.eficiencia,
+      data.estado,
+      data.fechaGeneracion
+    ];
+
+    sheet.appendRow(newRow);
+
+    return ContentService
+      .createTextOutput('Success')
+      .setMimeType(ContentService.MimeType.TEXT);
+
+  } catch (error) {
+    return ContentService
+      .createTextOutput('Error: ' + error.toString())
+      .setMimeType(ContentService.MimeType.TEXT);
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+4️⃣ Guarda el proyecto (Ctrl+S)
+5️⃣ Haz clic en "Implementar" → "Nueva implementación"
+6️⃣ Tipo: "Aplicación web"
+7️⃣ Ejecutar como: "Yo"
+8️⃣ Acceso: "Cualquier persona"
+9️⃣ Copia la URL que aparece
+🔟 Pégala arriba en el campo "URL de Google Apps Script"
+
+✅ ¡Listo! Ahora tus partes se guardarán automáticamente en Sheets
+                                                        `;
+                                                        alert(instructions);
+                                                    }}
+                                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                                >
+                                                    📖 Ver instrucciones completas
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Configuración de límite de historial */}
+                                    <div className="bg-gray-50 p-6 rounded-lg border-2 border-gray-200">
+                                        <h4 className="font-bold mb-4 text-gray-800 text-lg">📚 Gestión de Historial</h4>
+
+                                        <div className="space-y-4">
+                                            <div className="flex items-center gap-4">
+                                                <label className="text-sm font-medium text-gray-700">
+                                                    Máximo partes a mantener:
+                                                </label>
+                                                <select
+                                                    value={maxPartesLimit}
+                                                    onChange={(e) => saveSettings(parseInt(e.target.value))}
+                                                    className="px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                >
+                                                    <option value={10}>10 partes</option>
+                                                    <option value={25}>25 partes</option>
+                                                    <option value={50}>50 partes</option>
+                                                    <option value={100}>100 partes</option>
+                                                    <option value={200}>200 partes</option>
+                                                </select>
+                                            </div>
+
+                                            <p className="text-sm text-gray-600">
+                                                Los partes más antiguos se eliminarán automáticamente al superar este límite.
+                                                Actualmente tienes <strong>{partesHistory.length}</strong> partes guardados.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Información del sistema */}
+                                    <div className="bg-blue-50 p-6 rounded-lg border-2 border-blue-200">
+                                        <h4 className="font-bold mb-4 text-blue-800 text-lg">ℹ️ Información del Sistema</h4>
+
+                                        <div className="space-y-2 text-sm text-blue-700">
+                                            <p>• <strong>Versión:</strong> 2.0 - Google Sheets Integration</p>
+                                            <p>• <strong>Almacenamiento:</strong> Local + Google Sheets</p>
+                                            <p>• <strong>Funcionalidades:</strong> 9 pasos + Reconocimiento de voz + Exports profesionales</p>
+                                            <p>• <strong>Compatibilidad:</strong> Chrome, Firefox, Edge (Safari parcial)</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
