@@ -287,7 +287,7 @@
                 document.body.appendChild(loadingAlert);
 
                 try {
-                    // Preparar datos para envío
+                    // Preparar datos para envío con imágenes completas
                     const dataToSend = {
                         nombreTrabajo: formData.nombreTrabajo || 'Sin especificar',
                         fecha: formData.fecha || new Date().toISOString().split('T')[0],
@@ -297,8 +297,8 @@
                         incidencias: formData.incidencias || 'Sin incidencias',
                         observaciones: formData.observaciones || 'Sin observaciones',
                         tareasPendientes: formData.tareasPendientes || 'Sin tareas pendientes',
-                        imagenes: formData.imagenes || [],
-                        albaranes: formData.albaranes || []
+                        imagenes: (formData.imagenes || []).filter(img => img.url && img.url.startsWith('data:')),
+                        albaranes: (formData.albaranes || []).filter(alb => alb.url && alb.url.startsWith('data:'))
                     };
 
                     console.log('📊 ENVIANDO A GOOGLE SHEETS:', dataToSend);
@@ -318,8 +318,25 @@
                         document.body.removeChild(loadingAlert);
                     }
 
-                    // Mostrar confirmación
-                    alert('✅ ¡Datos enviados a Google Sheets!\\n\\n📊 El parte se ha guardado en tu base de datos.\\n🔗 Ver: https://docs.google.com/spreadsheets/d/1-BnjLpKsrUS5DdDmAEn16eEp9Uqs97cNpr_a7CScwfo\\n\\n💡 Los datos están listos para análisis y reportes.');
+                    // Contar archivos enviados
+                    const numImagenes = dataToSend.imagenes.length;
+                    const numAlbaranes = dataToSend.albaranes.length;
+                    const totalArchivos = numImagenes + numAlbaranes;
+
+                    // Mostrar confirmación detallada
+                    let mensaje = '✅ ¡Datos enviados exitosamente!\\n\\n';
+                    mensaje += '📊 Google Sheets: Actualizado\\n';
+                    if (totalArchivos > 0) {
+                        mensaje += '📁 Google Drive: ';
+                        if (numImagenes > 0) mensaje += `${numImagenes} imagen(es) `;
+                        if (numAlbaranes > 0) mensaje += `${numAlbaranes} albarán(es) `;
+                        mensaje += 'guardados\\n';
+                    }
+                    mensaje += '\\n🔗 Ver datos: https://docs.google.com/spreadsheets/d/1-BnjLpKsrUS5DdDmAEn16eEp9Uqs97cNpr_a7CScwfo';
+                    mensaje += '\\n📁 Carpeta Drive: Partes_Diarios_Trabajo';
+                    mensaje += '\\n\\n💡 Base de datos profesional lista para análisis!';
+
+                    alert(mensaje);
 
                     return true;
 
