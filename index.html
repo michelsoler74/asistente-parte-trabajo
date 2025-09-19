@@ -315,6 +315,10 @@
                     'entry.1652758369': formData.albaranes.length // Albaranes
                 };
 
+                // Debug: Mostrar datos que se van a enviar
+                console.log('📊 DATOS ENVIANDO A GOOGLE FORMS:', formFields);
+                console.log('📊 FORM DATA COMPLETO:', formData);
+
                 // Añadir campos al formulario
                 Object.keys(formFields).forEach(key => {
                     const input = document.createElement('input');
