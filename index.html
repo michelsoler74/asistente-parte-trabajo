@@ -270,15 +270,9 @@
                 localStorage.setItem('google_forms_url', url);
             };
 
-            // Función para enviar datos a Google Forms
-            const sendToGoogleForms = () => {
-                if (!googleFormsUrl.trim()) {
-                    alert('⚠️ No hay URL de Google Forms configurada\\n\\nVe a Configuración → Google Forms para añadir tu URL del formulario');
-                    return false;
-                }
-
-                const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
-                const fecha = new Date(formData.fecha);
+            // Función para enviar datos a Google Sheets
+            const sendToGoogleSheets = async () => {
+                const sheetsUrl = 'https://script.google.com/macros/s/AKfycby79TauHYudyv4CH7CP_x6s7TNqnkXDmIFPIt8IocKe8C0hMhuc5-Eg-ylleNN6UiZhhQ/exec';
 
                 // Mostrar indicador de carga
                 const loadingAlert = document.createElement('div');
@@ -286,78 +280,60 @@
                     <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
                                 background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
                                 z-index: 10000; text-align: center;">
-                        <div style="font-size: 18px; margin-bottom: 10px;">📊 Enviando a Google Forms...</div>
-                        <div style="font-size: 14px; color: #666;">Por favor espera</div>
+                        <div style="font-size: 18px; margin-bottom: 10px;">📊 Enviando a Google Sheets...</div>
+                        <div style="font-size: 14px; color: #666;">Guardando en base de datos...</div>
                     </div>
                 `;
                 document.body.appendChild(loadingAlert);
 
-                // Crear formulario invisible para envío a Google Forms
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = googleFormsUrl;
-                form.target = 'hidden_iframe';
-                form.style.display = 'none';
+                try {
+                    // Preparar datos para envío
+                    const dataToSend = {
+                        nombreTrabajo: formData.nombreTrabajo || 'Sin especificar',
+                        fecha: formData.fecha || new Date().toISOString().split('T')[0],
+                        operarios: formData.operarios || [],
+                        trabajosRealizados: formData.trabajosRealizados || 'Sin especificar',
+                        materialesUtilizados: formData.materialesUtilizados || 'Sin materiales',
+                        incidencias: formData.incidencias || 'Sin incidencias',
+                        observaciones: formData.observaciones || 'Sin observaciones',
+                        tareasPendientes: formData.tareasPendientes || 'Sin tareas pendientes',
+                        imagenes: formData.imagenes || [],
+                        albaranes: formData.albaranes || []
+                    };
 
-                // Preparar los datos para Google Forms con entry IDs reales y validación
-                const formFields = {
-                    'entry.1609146625': formData.nombreTrabajo || 'Sin especificar', // Proyecto
-                    'entry.1854148894': formData.fecha || new Date().toISOString().split('T')[0], // Fecha
-                    'entry.506300148': totalHoras.toString() || '0', // Total de Horas
-                    'entry.344006223': (formData.operarios?.length || 0).toString(), // Num Operarios
-                    'entry.2113503178': formData.operarios?.map(op => `${op.nombre || 'Sin nombre'}: ${op.horas || 0}h`).join(', ') || 'Sin operarios', // Nombre de Operarios
-                    'entry.1661225070': formData.trabajosRealizados || 'Sin especificar', // Trabajos Realizados
-                    'entry.610430841': formData.materialesUtilizados || 'Sin materiales', // Materiales
-                    'entry.930728203': formData.incidencias || 'Sin incidencias', // Incidentes
-                    'entry.123490185': formData.observaciones || 'Sin observaciones', // Observaciones
-                    'entry.1028727727': formData.tareasPendientes || 'Sin tareas pendientes', // Tareas Pendientes
-                    'entry.1499739742': (formData.imagenes?.length || 0).toString(), // Imagenes
-                    'entry.1652758369': (formData.albaranes?.length || 0).toString() // Albaranes
-                };
+                    console.log('📊 ENVIANDO A GOOGLE SHEETS:', dataToSend);
 
-                // Debug: Mostrar datos que se van a enviar
-                console.log('📊 DATOS ENVIANDO A GOOGLE FORMS:', formFields);
-                console.log('📊 FORM DATA COMPLETO:', formData);
+                    // Enviar datos
+                    const response = await fetch(sheetsUrl, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(dataToSend)
+                    });
 
-                // Mostrar alerta con datos para debug
-                const datosDebug = Object.entries(formFields).map(([key, value]) => `${key}: "${value}"`).join('\n');
-                alert('🐛 DEBUG - Datos enviando:\n\n' + datosDebug);
+                    // Quitar indicador de carga
+                    if (loadingAlert.parentNode) {
+                        document.body.removeChild(loadingAlert);
+                    }
 
-                // Añadir campos al formulario
-                Object.keys(formFields).forEach(key => {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = key;
-                    input.value = formFields[key];
-                    form.appendChild(input);
-                });
+                    // Mostrar confirmación
+                    alert('✅ ¡Datos enviados a Google Sheets!\\n\\n📊 El parte se ha guardado en tu base de datos.\\n🔗 Ver: https://docs.google.com/spreadsheets/d/1-BnjLpKsrUS5DdDmAEn16eEp9Uqs97cNpr_a7CScwfo\\n\\n💡 Los datos están listos para análisis y reportes.');
 
-                // Crear iframe invisible
-                let iframe = document.getElementById('hidden_iframe');
-                if (!iframe) {
-                    iframe = document.createElement('iframe');
-                    iframe.id = 'hidden_iframe';
-                    iframe.name = 'hidden_iframe';
-                    iframe.style.display = 'none';
-                    document.body.appendChild(iframe);
+                    return true;
+
+                } catch (error) {
+                    console.error('Error enviando a Google Sheets:', error);
+
+                    // Quitar indicador de carga
+                    if (loadingAlert.parentNode) {
+                        document.body.removeChild(loadingAlert);
+                    }
+
+                    alert('❌ Error enviando a Google Sheets\\n\\n' + error.message + '\\n\\nPero el parte se ha guardado localmente.');
+                    return false;
                 }
-
-                // Manejar respuesta
-                iframe.onload = () => {
-                    setTimeout(() => {
-                        if (loadingAlert.parentNode) {
-                            document.body.removeChild(loadingAlert);
-                        }
-                        alert('✅ ¡Datos enviados a Google Forms!\\n\\n📊 Los datos se han guardado en tu Google Sheet automáticamente.\\n💡 Perfecto para análisis con IA - exporta el CSV cuando quieras analizar.');
-                        form.remove();
-                    }, 1000);
-                };
-
-                // Enviar formulario
-                document.body.appendChild(form);
-                form.submit();
-
-                return true;
             };
 
             const MemoryIndicator = () => {
@@ -942,7 +918,7 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
 
                     if (saveToHistory()) {
                         alert('✅ Parte diario guardado en el historial correctamente');
-                        sendToGoogleForms(); // Enviar a Google Forms automáticamente
+                        sendToGoogleSheets(); // Enviar a Google Sheets automáticamente
                     } else {
                         alert('❌ Error al guardar en el historial');
                     }
@@ -1235,7 +1211,7 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
 
             const exportToGoogleForms = () => {
                 // Enviar a Google Forms en lugar de descargar CSV
-                const success = sendToGoogleForms();
+                const success = sendToGoogleSheets();
                 if (success) {
                     // También guardamos en el historial local
                     saveCurrentParte();
@@ -1852,10 +1828,10 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                         📄 Descargar HTML/PDF
                                     </button>
                                     <button
-                                        onClick={sendToGoogleForms}
+                                        onClick={sendToGoogleSheets}
                                         className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center justify-center gap-2"
                                     >
-                                        📊 Enviar a Google Forms
+                                        📊 Enviar a Google Sheets
                                     </button>
                                 </div>
 
