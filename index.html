@@ -693,27 +693,104 @@
 
             const generateResumen = () => {
                 const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
+                const fecha = new Date(formData.fecha);
+                const fechaFormateada = fecha.toLocaleDateString('es-ES', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+
+                // Calcular estadísticas avanzadas
+                const promedioHoras = formData.operarios.length > 0 ? (totalHoras / formData.operarios.length).toFixed(1) : 0;
+                const eficiencia = totalHoras >= 8 ? 'ÓPTIMA' : totalHoras >= 6 ? 'BUENA' : totalHoras >= 4 ? 'REGULAR' : 'BAJA';
+                const estado = formData.incidencias ? 'CON INCIDENCIAS' : 'COMPLETADO';
+                const complejidad = totalHoras > 12 ? 'ALTA' : totalHoras > 8 ? 'MEDIA' : 'BAJA';
+
                 const resumen = `
-📋 RESUMEN DEL PARTE DIARIO
+═══════════════════════════════════════════════════════════════════════════════════
+                           RESUMEN EJECUTIVO - PARTE DIARIO DE TRABAJO
+═══════════════════════════════════════════════════════════════════════════════════
 
-🏗️ Trabajo: ${formData.nombreTrabajo}
-📅 Fecha: ${formData.fecha}
+📋 INFORMACIÓN DEL PROYECTO
+────────────────────────────────────────────────────────────────────────────────────
+• Proyecto: ${formData.nombreTrabajo.toUpperCase()}
+• Fecha de Ejecución: ${fechaFormateada}
+• Estado del Trabajo: ${estado}
+• Complejidad: ${complejidad}
 
-👷‍♂️ Personal:
-${formData.operarios.map(op => `• ${op.nombre}: ${op.horas} horas`).join('\\n')}
-⏱️ Total horas trabajadas: ${totalHoras}h
+⏱️ ANÁLISIS DE RENDIMIENTO
+────────────────────────────────────────────────────────────────────────────────────
+• Total de Horas Invertidas: ${totalHoras} horas
+• Número de Operarios: ${formData.operarios.length} personas
+• Promedio por Operario: ${promedioHoras} horas
+• Eficiencia del Equipo: ${eficiencia}
+• Productividad: ${totalHoras > 0 ? `${(totalHoras / formData.operarios.length * 100 / 8).toFixed(0)}%` : '0%'} de la jornada estándar
 
-🔧 Actividades principales:
+👷‍♂️ DISTRIBUCIÓN DEL PERSONAL
+────────────────────────────────────────────────────────────────────────────────────
+${formData.operarios.map((op, index) => {
+    const horas = parseFloat(op.horas) || 0;
+    const porcentaje = totalHoras > 0 ? ((horas / totalHoras) * 100).toFixed(1) : '0.0';
+    return `${index + 1}. ${op.nombre}: ${horas}h (${porcentaje}% del total)`;
+}).join('\\n')}
+
+🎯 OBJETIVOS Y ACTIVIDADES EJECUTADAS
+────────────────────────────────────────────────────────────────────────────────────
 ${formData.trabajosRealizados}
 
-📦 Materiales empleados:
+🔧 RECURSOS Y MATERIALES EMPLEADOS
+────────────────────────────────────────────────────────────────────────────────────
 ${formData.materialesUtilizados}
 
-${formData.incidencias ? `⚠️ Incidencias:\\n${formData.incidencias}` : '✅ Sin incidencias reportadas'}
+${formData.incidencias ? `
+⚠️ GESTIÓN DE INCIDENCIAS
+────────────────────────────────────────────────────────────────────────────────────
+ESTADO: IDENTIFICADAS Y DOCUMENTADAS
+DESCRIPCIÓN: ${formData.incidencias}
+ACCIÓN REQUERIDA: Revisión y seguimiento necesario
+PRIORIDAD: ${formData.incidencias.toLowerCase().includes('urgente') || formData.incidencias.toLowerCase().includes('crítico') ? 'ALTA' : 'MEDIA'}
+` : `
+✅ CONTROL DE CALIDAD
+────────────────────────────────────────────────────────────────────────────────────
+ESTADO: SIN INCIDENCIAS REPORTADAS
+EVALUACIÓN: TRABAJO EJECUTADO CONFORME A ESPECIFICACIONES
+CALIDAD: SATISFACTORIA
+`}
 
-${formData.tareasPendientes ? `📋 Pendiente para mañana:\\n${formData.tareasPendientes}` : ''}
+${formData.observaciones ? `
+💡 ANÁLISIS TÉCNICO Y OBSERVACIONES
+────────────────────────────────────────────────────────────────────────────────────
+${formData.observaciones}
+` : ''}
 
-${formData.observaciones ? `💡 Observaciones:\\n${formData.observaciones}` : ''}
+${formData.tareasPendientes ? `
+📋 PLANIFICACIÓN PARA PRÓXIMA JORNADA
+────────────────────────────────────────────────────────────────────────────────────
+TAREAS PROGRAMADAS:
+${formData.tareasPendientes}
+
+RECURSOS NECESARIOS: Por definir según tareas
+TIEMPO ESTIMADO: Por evaluar
+` : `
+📋 PLANIFICACIÓN PARA PRÓXIMA JORNADA
+────────────────────────────────────────────────────────────────────────────────────
+ESTADO: FASE ACTUAL COMPLETADA
+PRÓXIMOS PASOS: Pendiente de definición
+`}
+
+📊 INDICADORES CLAVE DE RENDIMIENTO (KPI)
+────────────────────────────────────────────────────────────────────────────────────
+• Cumplimiento de Horario: ${eficiencia}
+• Gestión de Recursos: ${formData.materialesUtilizados ? 'ADECUADA' : 'NO ESPECIFICADA'}
+• Documentación: ${formData.imagenes.length} evidencias fotográficas adjuntas
+• Control de Incidencias: ${formData.incidencias ? 'GESTIONADO' : 'SIN INCIDENCIAS'}
+• Planificación: ${formData.tareasPendientes ? 'DEFINIDA' : 'PENDIENTE'}
+
+═══════════════════════════════════════════════════════════════════════════════════
+Documento generado automáticamente el ${new Date().toLocaleString('es-ES')}
+Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
+═══════════════════════════════════════════════════════════════════════════════════
                 `.trim();
 
                 handleInputChange('resumenInteligente', resumen);
@@ -769,38 +846,265 @@ ${formData.observaciones ? `💡 Observaciones:\\n${formData.observaciones}` : '
             };
 
             const exportToPDF = () => {
-                const content = `
-PARTE DIARIO DE TRABAJO
+                const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
 
-═══════════════════════════════════════════════════════
+                const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Parte Diario de Trabajo - ${formData.nombreTrabajo}</title>
+    <style>
+        @media print {
+            body { margin: 0; }
+            .page-break { page-break-after: always; }
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 210mm;
+            margin: 0 auto;
+            padding: 20mm;
+            line-height: 1.6;
+            color: #333;
+            background: white;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #2563eb;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .company-logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2563eb;
+            margin-bottom: 5px;
+        }
+        .document-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1e40af;
+            margin: 10px 0;
+        }
+        .work-info {
+            background: #f8fafc;
+            border-left: 4px solid #2563eb;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .section {
+            margin: 25px 0;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1e40af;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 8px;
+            margin-bottom: 15px;
+        }
+        .personnel-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        .personnel-table th,
+        .personnel-table td {
+            border: 1px solid #cbd5e1;
+            padding: 12px;
+            text-align: left;
+        }
+        .personnel-table th {
+            background: #f1f5f9;
+            font-weight: bold;
+            color: #1e40af;
+        }
+        .personnel-table .total-row {
+            background: #e0f2fe;
+            font-weight: bold;
+        }
+        .content-box {
+            background: #fafafa;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .alert-box {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-left: 4px solid #ef4444;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .warning-box {
+            background: #fffbeb;
+            border: 1px solid #fed7aa;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .pending-box {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-left: 4px solid #0284c7;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e2e8f0;
+            text-align: center;
+            font-size: 12px;
+            color: #64748b;
+        }
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2563eb;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="company-logo">🏗️ CONSTRUCCIONES</div>
+        <div class="document-title">PARTE DIARIO DE TRABAJO</div>
+        <div style="font-size: 14px; color: #64748b;">Documento oficial - ${new Date().toLocaleDateString('es-ES')}</div>
+    </div>
 
-📋 INFORMACIÓN GENERAL
-────────────────────────────────────────────────────────
-Trabajo: ${formData.nombreTrabajo}
-Fecha: ${formData.fecha}
+    <div class="work-info">
+        <h2 style="margin: 0 0 10px 0; color: #1e40af;">📋 INFORMACIÓN DEL TRABAJO</h2>
+        <p style="margin: 5px 0;"><strong>Proyecto:</strong> ${formData.nombreTrabajo}</p>
+        <p style="margin: 5px 0;"><strong>Fecha:</strong> ${new Date(formData.fecha).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        <p style="margin: 5px 0;"><strong>Generado:</strong> ${new Date().toLocaleString('es-ES')}</p>
+    </div>
 
-👷‍♂️ PERSONAL Y HORAS
-────────────────────────────────────────────────────────
-${formData.operarios.map(op => `• ${op.nombre}: ${op.horas} horas`).join('\\n')}
-Total horas trabajadas: ${formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0)}h
+    <div class="summary-stats">
+        <div class="stat-card">
+            <div class="stat-number">${totalHoras}h</div>
+            <div class="stat-label">HORAS TOTALES</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">${formData.operarios.length}</div>
+            <div class="stat-label">OPERARIOS</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">${formData.imagenes.length}</div>
+            <div class="stat-label">IMÁGENES</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">${formData.incidencias ? 'SÍ' : 'NO'}</div>
+            <div class="stat-label">INCIDENCIAS</div>
+        </div>
+    </div>
 
-🔧 TRABAJOS REALIZADOS
-────────────────────────────────────────────────────────
-${formData.trabajosRealizados}
+    <div class="section">
+        <h3 class="section-title">👷‍♂️ PERSONAL Y HORAS TRABAJADAS</h3>
+        <table class="personnel-table">
+            <thead>
+                <tr>
+                    <th>Operario</th>
+                    <th>Horas Trabajadas</th>
+                    <th>Observaciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${formData.operarios.map(op => `
+                <tr>
+                    <td>${op.nombre}</td>
+                    <td>${op.horas}h</td>
+                    <td>-</td>
+                </tr>
+                `).join('')}
+                <tr class="total-row">
+                    <td><strong>TOTAL HORAS</strong></td>
+                    <td><strong>${totalHoras}h</strong></td>
+                    <td><strong>${(totalHoras / formData.operarios.length).toFixed(1)}h promedio</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
 
-📦 MATERIALES UTILIZADOS
-────────────────────────────────────────────────────────
-${formData.materialesUtilizados}
+    <div class="section">
+        <h3 class="section-title">🔧 TRABAJOS REALIZADOS</h3>
+        <div class="content-box">
+            ${formData.trabajosRealizados.split('\\n').map(line => line ? `<p>${line}</p>` : '<br>').join('')}
+        </div>
+    </div>
 
-${formData.incidencias ? `⚠️  INCIDENCIAS\\n────────────────────────────────────────────────────────\\n${formData.incidencias}\\n\\n` : ''}${formData.observaciones ? `💡 OBSERVACIONES\\n────────────────────────────────────────────────────────\\n${formData.observaciones}\\n\\n` : ''}${formData.tareasPendientes ? `📋 TAREAS PENDIENTES PARA MAÑANA\\n────────────────────────────────────────────────────────\\n${formData.tareasPendientes}\\n\\n` : ''}📊 RESUMEN EJECUTIVO
-────────────────────────────────────────────────────────
-${formData.resumenInteligente}
+    <div class="section">
+        <h3 class="section-title">📦 MATERIALES UTILIZADOS</h3>
+        <div class="content-box">
+            ${formData.materialesUtilizados.split('\\n').map(line => line ? `<p>• ${line}</p>` : '<br>').join('')}
+        </div>
+    </div>
 
-═══════════════════════════════════════════════════════
-Generado el ${new Date().toLocaleString('es-ES')}
+    ${formData.incidencias ? `
+    <div class="section">
+        <h3 class="section-title">⚠️ INCIDENCIAS</h3>
+        <div class="alert-box">
+            ${formData.incidencias.split('\\n').map(line => line ? `<p>${line}</p>` : '<br>').join('')}
+        </div>
+    </div>
+    ` : ''}
+
+    ${formData.observaciones ? `
+    <div class="section">
+        <h3 class="section-title">💡 OBSERVACIONES</h3>
+        <div class="warning-box">
+            ${formData.observaciones.split('\\n').map(line => line ? `<p>${line}</p>` : '<br>').join('')}
+        </div>
+    </div>
+    ` : ''}
+
+    ${formData.tareasPendientes ? `
+    <div class="section">
+        <h3 class="section-title">📋 TAREAS PENDIENTES</h3>
+        <div class="pending-box">
+            ${formData.tareasPendientes.split('\\n').map(line => line ? `<p>• ${line}</p>` : '<br>').join('')}
+        </div>
+    </div>
+    ` : ''}
+
+    ${formData.resumenInteligente ? `
+    <div class="section">
+        <h3 class="section-title">📊 RESUMEN EJECUTIVO</h3>
+        <div class="content-box" style="border-left: 4px solid #059669; background: #f0fdfa;">
+            ${formData.resumenInteligente.split('\\n').map(line => line ? `<p>${line}</p>` : '<br>').join('')}
+        </div>
+    </div>
+    ` : ''}
+
+    <div class="footer">
+        <p>Documento generado automáticamente por el Sistema de Gestión de Partes Diarios</p>
+        <p>Este documento es válido sin firma según la normativa interna de la empresa</p>
+        <p>Generado el ${new Date().toLocaleString('es-ES')}</p>
+    </div>
+</body>
+</html>
                 `.trim();
 
-                const blob = new Blob([content], { type: 'text/html;charset=utf-8' });
+                // Crear y descargar como HTML
+                const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -809,77 +1113,163 @@ Generado el ${new Date().toLocaleString('es-ES')}
                 a.click();
                 document.body.removeChild(a);
                 window.URL.revokeObjectURL(url);
+
+                // Mostrar mensaje informativo
+                alert('📄 PDF Profesional generado como HTML\\n\\n✅ Para convertir a PDF:\\n1. Abre el archivo HTML descargado\\n2. Ctrl+P (Imprimir)\\n3. Selecciona "Guardar como PDF"\\n4. ¡Listo! Tendrás un PDF profesional');
             };
 
             const exportToCSV = () => {
                 const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
+                const fecha = new Date(formData.fecha);
 
-                // CSV optimizado para Excel/Google Sheets
+                // CSV optimizado para Google Sheets con formato tabular profesional
                 const csvData = [
-                    // Encabezado con información general
-                    ['PARTE DIARIO DE TRABAJO'],
-                    [''],
-                    ['INFORMACIÓN GENERAL'],
-                    ['Trabajo', formData.nombreTrabajo],
-                    ['Fecha', formData.fecha],
-                    ['Total Horas', totalHoras],
-                    ['Número Operarios', formData.operarios.length],
-                    ['Tiene Incidencias', formData.incidencias ? 'Sí' : 'No'],
-                    ['Imágenes Adjuntas', formData.imagenes.length],
+                    // CABECERA PRINCIPAL
+                    ['PARTE DIARIO DE TRABAJO', '', '', '', '', '', ''],
                     [''],
 
-                    // Tabla de operarios
-                    ['PERSONAL Y HORAS'],
-                    ['Operario', 'Horas Trabajadas'],
-                    ...formData.operarios.map(op => [op.nombre, parseFloat(op.horas) || 0]),
-                    ['TOTAL', totalHoras],
+                    // INFORMACIÓN GENERAL (formato horizontal limpio)
+                    ['INFORMACIÓN DEL PROYECTO', '', '', '', '', '', ''],
+                    ['Proyecto', 'Fecha', 'Día Semana', 'Total Horas', 'Num. Operarios', 'Incidencias', 'Imágenes'],
+                    [
+                        formData.nombreTrabajo,
+                        formData.fecha,
+                        fecha.toLocaleDateString('es-ES', { weekday: 'long' }),
+                        totalHoras,
+                        formData.operarios.length,
+                        formData.incidencias ? 'SÍ' : 'NO',
+                        formData.imagenes.length
+                    ],
                     [''],
 
-                    // Descripción de trabajos (formato multilínea)
-                    ['TRABAJOS REALIZADOS'],
-                    [formData.trabajosRealizados.replace(/"/g, '""')],
+                    // TABLA DE PERSONAL Y HORAS
+                    ['PERSONAL TRABAJANDO', '', '', '', '', '', ''],
+                    ['N°', 'Operario', 'Horas', 'Porcentaje', 'Observaciones', '', ''],
+                    ...formData.operarios.map((op, index) => [
+                        index + 1,
+                        op.nombre,
+                        parseFloat(op.horas) || 0,
+                        totalHoras > 0 ? `${((parseFloat(op.horas) || 0) / totalHoras * 100).toFixed(1)}%` : '0%',
+                        '-',
+                        '',
+                        ''
+                    ]),
+                    ['', 'TOTAL HORAS', totalHoras, '100%', `Promedio: ${(totalHoras / formData.operarios.length).toFixed(1)}h`, '', ''],
                     [''],
 
-                    // Materiales
-                    ['MATERIALES UTILIZADOS'],
-                    [formData.materialesUtilizados.replace(/"/g, '""')],
+                    // TRABAJOS REALIZADOS (formato estructurado)
+                    ['TRABAJOS REALIZADOS', '', '', '', '', '', ''],
+                    ['Descripción', 'Estado', 'Complejidad', 'Tiempo Estimado', 'Observaciones', '', ''],
+                    [
+                        formData.trabajosRealizados,
+                        'COMPLETADO',
+                        'Media',
+                        `${totalHoras}h`,
+                        'Ver descripción detallada',
+                        '',
+                        ''
+                    ],
                     [''],
 
-                    // Incidencias (solo si existen)
-                    ...(formData.incidencias ? [
-                        ['INCIDENCIAS'],
-                        [formData.incidencias.replace(/"/g, '""')],
-                        ['']
-                    ] : []),
-
-                    // Observaciones (solo si existen)
-                    ...(formData.observaciones ? [
-                        ['OBSERVACIONES'],
-                        [formData.observaciones.replace(/"/g, '""')],
-                        ['']
-                    ] : []),
-
-                    // Tareas pendientes (solo si existen)
-                    ...(formData.tareasPendientes ? [
-                        ['TAREAS PENDIENTES'],
-                        [formData.tareasPendientes.replace(/"/g, '""')],
-                        ['']
-                    ] : []),
-
-                    // Metadatos
-                    ['METADATOS'],
-                    ['Generado el', new Date().toLocaleString('es-ES')],
-                    ['ID del Parte', currentParteId || 'N/A'],
+                    // MATERIALES Y RECURSOS
+                    ['MATERIALES Y HERRAMIENTAS', '', '', '', '', '', ''],
+                    ['Material/Herramienta', 'Cantidad', 'Estado', 'Observaciones', '', '', ''],
+                    ...formData.materialesUtilizados.split(',').map(material => [
+                        material.trim(),
+                        '1',
+                        'USADO',
+                        '-',
+                        '',
+                        '',
+                        ''
+                    ]),
                     ['']
                 ];
 
-                // Añadir BOM para compatibilidad con Excel
+                // Añadir secciones opcionales solo si existen
+                if (formData.incidencias) {
+                    csvData.push(
+                        ['INCIDENCIAS Y PROBLEMAS', '', '', '', '', '', ''],
+                        ['Tipo', 'Descripción', 'Severidad', 'Estado', 'Acción Requerida', '', ''],
+                        [
+                            'GENERAL',
+                            formData.incidencias,
+                            'MEDIA',
+                            'REPORTADO',
+                            'Revisar y solucionar',
+                            '',
+                            ''
+                        ],
+                        ['']
+                    );
+                }
+
+                if (formData.observaciones) {
+                    csvData.push(
+                        ['OBSERVACIONES TÉCNICAS', '', '', '', '', '', ''],
+                        ['Observación', 'Tipo', 'Importancia', 'Fecha', '', '', ''],
+                        [
+                            formData.observaciones,
+                            'TÉCNICA',
+                            'IMPORTANTE',
+                            formData.fecha,
+                            '',
+                            '',
+                            ''
+                        ],
+                        ['']
+                    );
+                }
+
+                if (formData.tareasPendientes) {
+                    csvData.push(
+                        ['TAREAS PENDIENTES', '', '', '', '', '', ''],
+                        ['Tarea', 'Prioridad', 'Tiempo Estimado', 'Responsable', 'Fecha Límite', '', ''],
+                        [
+                            formData.tareasPendientes,
+                            'ALTA',
+                            'Por definir',
+                            'Equipo',
+                            'Próximo día hábil',
+                            '',
+                            ''
+                        ],
+                        ['']
+                    );
+                }
+
+                // RESUMEN EJECUTIVO Y METADATOS
+                csvData.push(
+                    ['RESUMEN EJECUTIVO', '', '', '', '', '', ''],
+                    ['Descripción', 'Autor', 'Fecha Generación', 'Versión', '', '', ''],
+                    [
+                        formData.resumenInteligente || 'Resumen automático generado',
+                        'Sistema Automático',
+                        new Date().toLocaleString('es-ES'),
+                        '1.0',
+                        '',
+                        '',
+                        ''
+                    ],
+                    [''],
+
+                    // ESTADÍSTICAS FINALES
+                    ['ESTADÍSTICAS DEL PROYECTO', '', '', '', '', '', ''],
+                    ['Métrica', 'Valor', 'Unidad', 'Observaciones', '', '', ''],
+                    ['Duración Total', totalHoras, 'horas', `${formData.operarios.length} operarios`],
+                    ['Eficiencia', totalHoras > 0 ? 'NORMAL' : 'SIN DATOS', 'Cualitativa', 'Basado en horas/operarios'],
+                    ['Calidad', formData.incidencias ? 'CON INCIDENCIAS' : 'SIN INCIDENCIAS', 'Cualitativa', 'Estado del trabajo'],
+                    ['Documentación', formData.imagenes.length, 'imágenes', 'Evidencia fotográfica'],
+                    ['']
+                );
+
+                // Generar CSV con BOM para Excel
                 const BOM = '\\uFEFF';
                 const csvContent = BOM + csvData.map(row => {
                     return row.map(cell => {
-                        // Escapar comillas y envolver en comillas si contiene comas, saltos de línea o comillas
                         const cellStr = String(cell);
-                        if (cellStr.includes(',') || cellStr.includes('\\n') || cellStr.includes('\"')) {
+                        // Escapar comillas y envolver en comillas si es necesario
+                        if (cellStr.includes(',') || cellStr.includes('\\n') || cellStr.includes('\"') || cellStr.includes(';')) {
                             return `"${cellStr.replace(/"/g, '""')}"`;
                         }
                         return cellStr;
@@ -896,10 +1286,8 @@ Generado el ${new Date().toLocaleString('es-ES')}
                 document.body.removeChild(a);
                 window.URL.revokeObjectURL(url);
 
-                // Mostrar instrucciones
-                setTimeout(() => {
-                    alert('📊 CSV descargado con éxito.\\n\\nOptimizado para:\\n• Microsoft Excel\\n• Google Sheets\\n• LibreOffice Calc\\n\\nTip: Usa "Datos > Texto en columnas" si necesitas separar más campos.');
-                }, 500);
+                // Mostrar mensaje mejorado
+                alert('📊 CSV Profesional generado\\n\\n✅ Perfecto para Google Sheets:\\n• Tablas estructuradas con columnas\\n• Headers organizados\\n• Estadísticas incluidas\\n• Compatible con Excel y LibreOffice\\n\\n💡 Importa directamente en Sheets para análisis');
             };
 
             const renderStep = () => {
