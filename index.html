@@ -2275,46 +2275,57 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
 
                                             <div className="flex gap-3">
                                                 <button
-                                                    onClick={async () => {
+                                                    onClick={() => {
                                                         if (!googleFormsUrl.trim()) {
                                                             alert('⚠️ Primero configura la URL de Google Forms');
                                                             return;
                                                         }
 
-                                                        const testData = {
-                                                            proyecto: 'TEST - Prueba de conexión',
-                                                            fecha: new Date().toISOString().split('T')[0],
-                                                            diaSemana: 'Prueba',
-                                                            totalHoras: 8,
-                                                            numOperarios: 1,
-                                                            tieneIncidencias: 'NO',
-                                                            numImagenes: 0,
-                                                            operarios: [{ nombre: 'Usuario Test', horas: 8 }],
-                                                            trabajosRealizados: 'Prueba de conexión con Google Sheets',
-                                                            materialesUtilizados: 'Ninguno',
-                                                            observaciones: '',
-                                                            tareasPendientes: '',
-                                                            fechaGeneracion: new Date().toLocaleString('es-ES'),
-                                                            eficiencia: 'PRUEBA',
-                                                            estado: 'TEST',
-                                                            complejidad: 'BAJA'
+                                                        // Crear formulario de prueba usando el mismo método que el envío real
+                                                        const form = document.createElement('form');
+                                                        form.method = 'POST';
+                                                        form.action = googleFormsUrl;
+                                                        form.target = '_blank'; // Abrir en nueva pestaña para ver resultado
+                                                        form.style.display = 'none';
+
+                                                        // Datos de prueba usando entry IDs genéricos
+                                                        const testFields = {
+                                                            'entry.1000001': 'TEST - Prueba de conexión',
+                                                            'entry.1000002': new Date().toISOString().split('T')[0],
+                                                            'entry.1000003': new Date().toLocaleDateString('es-ES', { weekday: 'long' }),
+                                                            'entry.1000004': '8',
+                                                            'entry.1000005': '1',
+                                                            'entry.1000006': 'Usuario Test: 8h',
+                                                            'entry.1000007': 'Prueba de conexión con Google Forms',
+                                                            'entry.1000008': 'Ninguno',
+                                                            'entry.1000009': 'Sin incidencias',
+                                                            'entry.1000010': 'Prueba realizada desde configuración',
+                                                            'entry.1000011': 'Sin tareas pendientes',
+                                                            'entry.1000012': 'ÓPTIMA',
+                                                            'entry.1000013': 'COMPLETADO',
+                                                            'entry.1000014': '0',
+                                                            'entry.1000015': '0'
                                                         };
 
-                                                        try {
-                                                            const response = await fetch(googleFormsUrl, {
-                                                                method: 'POST',
-                                                                headers: { 'Content-Type': 'application/json' },
-                                                                body: JSON.stringify(testData)
-                                                            });
+                                                        // Añadir campos al formulario
+                                                        Object.keys(testFields).forEach(key => {
+                                                            const input = document.createElement('input');
+                                                            input.type = 'hidden';
+                                                            input.name = key;
+                                                            input.value = testFields[key];
+                                                            form.appendChild(input);
+                                                        });
 
-                                                            if (response.ok) {
-                                                                alert('✅ ¡Conexión exitosa!\\n\\nSe ha enviado un registro de prueba a tu Google Sheet. Verifica que aparezca correctamente.');
-                                                            } else {
-                                                                throw new Error(`HTTP ${response.status}`);
-                                                            }
-                                                        } catch (error) {
-                                                            alert(`❌ Error de conexión\\n\\n${error.message}\\n\\nVerifica la URL y configuración de Google Forms`);
-                                                        }
+                                                        document.body.appendChild(form);
+
+                                                        alert('🧪 Enviando datos de prueba...\\n\\nSe abrirá una nueva pestaña con el resultado.\\n\\nSi ves un mensaje de confirmación de Google Forms, ¡la conexión funciona!');
+
+                                                        form.submit();
+
+                                                        // Limpiar formulario después de 1 segundo
+                                                        setTimeout(() => {
+                                                            document.body.removeChild(form);
+                                                        }, 1000);
                                                     }}
                                                     className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300"
                                                     disabled={!googleFormsUrl.trim()}
@@ -2327,30 +2338,40 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                                         const instructions = `
 🚀 CÓMO CONFIGURAR GOOGLE FORMS INTEGRATION
 
-📋 PASOS RÁPIDOS:
+📋 PASOS DETALLADOS:
 
 1️⃣ Ve a Google Forms (forms.google.com)
-2️⃣ Crea un nuevo formulario
-3️⃣ Añade los siguientes campos (todos como "Respuesta corta"):
+2️⃣ Crea un nuevo formulario llamado "Partes Diarios de Trabajo"
+3️⃣ Añade EXACTAMENTE estos 15 campos (todos como "Respuesta corta"):
    • Proyecto
    • Fecha
+   • Día de la Semana
    • Total Horas
-   • Operarios
+   • Número de Operarios
+   • Personal
    • Trabajos Realizados
    • Materiales
    • Incidencias
    • Observaciones
    • Tareas Pendientes
+   • Eficiencia
+   • Estado
    • Albaranes
+   • Número de Imágenes
 
 4️⃣ Haz clic en los 3 puntos → "Obtener enlace rellenado previamente"
-5️⃣ Rellena cualquier valor en todos los campos
+5️⃣ Rellena CUALQUIER valor en TODOS los campos (importante: no dejes ninguno vacío)
 6️⃣ Haz clic en "Obtener enlace"
-7️⃣ Copia la URL que aparece
+7️⃣ Copia la URL completa que aparece
 8️⃣ Cambia "viewform" por "formResponse" en la URL
 9️⃣ Pega esa URL arriba en el campo de configuración
 
-✅ ¡Listo! Ahora tus partes se enviarán automáticamente a Google Forms
+⚠️ IMPORTANTE:
+- Los campos deben estar en el MISMO ORDEN listado arriba
+- NO cambies los nombres de los campos
+- La URL debe terminar en "formResponse"
+
+✅ ¡Listo! Usa el botón "Probar conexión" para verificar que funciona
                                                         `;
                                                         alert(instructions);
                                                     }}
