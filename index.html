@@ -123,8 +123,8 @@
                 resumenInteligente: ''
             });
 
-            // Estado para configuración Google Sheets
-            const [googleSheetsUrl, setGoogleSheetsUrl] = useState('');
+            // Estado para configuración Google Forms
+            const [googleFormsUrl, setGoogleFormsUrl] = useState('');
 
             // Cargar datos guardados al inicializar
             useEffect(() => {
@@ -145,9 +145,9 @@
                     setMaxPartesLimit(parseInt(savedLimit));
                 }
 
-                const savedGoogleSheetsUrl = localStorage.getItem('google_sheets_url');
-                if (savedGoogleSheetsUrl) {
-                    setGoogleSheetsUrl(savedGoogleSheetsUrl);
+                const savedGoogleFormsUrl = localStorage.getItem('google_forms_url');
+                if (savedGoogleFormsUrl) {
+                    setGoogleFormsUrl(savedGoogleFormsUrl);
                 }
             };
 
@@ -264,92 +264,94 @@
                 }
             };
 
-            const saveGoogleSheetsUrl = (url) => {
-                setGoogleSheetsUrl(url);
-                localStorage.setItem('google_sheets_url', url);
+            const saveGoogleFormsUrl = (url) => {
+                setGoogleFormsUrl(url);
+                localStorage.setItem('google_forms_url', url);
             };
 
-            // Función para enviar datos directamente a Google Sheets
-            const sendToGoogleSheets = async () => {
-                if (!googleSheetsUrl.trim()) {
-                    alert('⚠️ No hay URL de Google Sheets configurada\\n\\nVe a Configuración → Google Sheets para añadir tu URL de Apps Script');
+            // Función para enviar datos a Google Forms
+            const sendToGoogleForms = () => {
+                if (!googleFormsUrl.trim()) {
+                    alert('⚠️ No hay URL de Google Forms configurada\\n\\nVe a Configuración → Google Forms para añadir tu URL del formulario');
                     return false;
                 }
 
                 const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
                 const fecha = new Date(formData.fecha);
 
-                // Preparar los datos en formato que Google Sheets puede procesar
-                const sheetData = {
-                    // Información general
-                    proyecto: formData.nombreTrabajo,
-                    fecha: formData.fecha,
-                    diaSemana: fecha.toLocaleDateString('es-ES', { weekday: 'long' }),
-                    totalHoras: totalHoras,
-                    numOperarios: formData.operarios.length,
-                    tieneIncidencias: formData.incidencias ? 'SÍ' : 'NO',
-                    numImagenes: formData.imagenes.length,
+                // Mostrar indicador de carga
+                const loadingAlert = document.createElement('div');
+                loadingAlert.innerHTML = `
+                    <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                                z-index: 10000; text-align: center;">
+                        <div style="font-size: 18px; margin-bottom: 10px;">📊 Enviando a Google Forms...</div>
+                        <div style="font-size: 14px; color: #666;">Por favor espera</div>
+                    </div>
+                `;
+                document.body.appendChild(loadingAlert);
 
-                    // Personal y horas
-                    operarios: formData.operarios.map((op, index) => ({
-                        numero: index + 1,
-                        nombre: op.nombre,
-                        horas: parseFloat(op.horas) || 0,
-                        porcentaje: totalHoras > 0 ? ((parseFloat(op.horas) || 0) / totalHoras * 100).toFixed(1) + '%' : '0%'
-                    })),
+                // Crear formulario invisible para envío a Google Forms
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = googleFormsUrl;
+                form.target = 'hidden_iframe';
+                form.style.display = 'none';
 
-                    // Descripciones
-                    trabajosRealizados: formData.trabajosRealizados,
-                    materialesUtilizados: formData.materialesUtilizados,
-                    incidencias: formData.incidencias || '',
-                    observaciones: formData.observaciones || '',
-                    tareasPendientes: formData.tareasPendientes || '',
-
-                    // Metadatos
-                    fechaGeneracion: new Date().toLocaleString('es-ES'),
-                    resumenInteligente: formData.resumenInteligente || '',
-
-                    // Estadísticas calculadas
-                    promedioHoras: (totalHoras / formData.operarios.length).toFixed(1),
-                    eficiencia: totalHoras >= 8 ? 'ÓPTIMA' : totalHoras >= 6 ? 'BUENA' : totalHoras >= 4 ? 'REGULAR' : 'BAJA',
-                    estado: formData.incidencias ? 'CON INCIDENCIAS' : 'COMPLETADO',
-                    complejidad: totalHoras > 12 ? 'ALTA' : totalHoras > 8 ? 'MEDIA' : 'BAJA'
+                // Preparar los datos para Google Forms (usando entry IDs estándar)
+                const formFields = {
+                    'entry.1000001': formData.nombreTrabajo, // Proyecto
+                    'entry.1000002': formData.fecha, // Fecha
+                    'entry.1000003': fecha.toLocaleDateString('es-ES', { weekday: 'long' }), // Día
+                    'entry.1000004': totalHoras, // Total Horas
+                    'entry.1000005': formData.operarios.length, // Num Operarios
+                    'entry.1000006': formData.operarios.map(op => `${op.nombre}: ${op.horas}h`).join(', '), // Personal
+                    'entry.1000007': formData.trabajosRealizados, // Trabajos
+                    'entry.1000008': formData.materialesUtilizados, // Materiales
+                    'entry.1000009': formData.incidencias || 'Sin incidencias', // Incidencias
+                    'entry.1000010': formData.observaciones || 'Sin observaciones', // Observaciones
+                    'entry.1000011': formData.tareasPendientes || 'Sin tareas pendientes', // Tareas Pendientes
+                    'entry.1000012': totalHoras >= 8 ? 'ÓPTIMA' : totalHoras >= 6 ? 'BUENA' : 'REGULAR', // Eficiencia
+                    'entry.1000013': formData.incidencias ? 'CON INCIDENCIAS' : 'COMPLETADO', // Estado
+                    'entry.1000014': new Date().toLocaleString('es-ES'), // Fecha Generación
+                    'entry.1000015': formData.imagenes.length // Num Imágenes
                 };
 
-                try {
-                    // Mostrar indicador de carga
-                    const loadingAlert = document.createElement('div');
-                    loadingAlert.innerHTML = `
-                        <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                                    background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-                                    z-index: 10000; text-align: center;">
-                            <div style="font-size: 18px; margin-bottom: 10px;">📊 Enviando a Google Sheets...</div>
-                            <div style="font-size: 14px; color: #666;">Por favor espera</div>
-                        </div>
-                    `;
-                    document.body.appendChild(loadingAlert);
+                // Añadir campos al formulario
+                Object.keys(formFields).forEach(key => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = key;
+                    input.value = formFields[key];
+                    form.appendChild(input);
+                });
 
-                    // Usar JSONP para evitar problemas de CORS
-                    const response = await fetch(googleSheetsUrl + '?callback=handleResponse', {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(sheetData)
-                    });
-
-                    document.body.removeChild(loadingAlert);
-
-                    // Con mode: 'no-cors', no podemos leer la respuesta, pero si llega aquí es que funcionó
-                    alert('✅ ¡Datos enviados a Google Sheets!\\n\\n📊 Verifica tu hoja de cálculo para confirmar que se guardó correctamente.');
-                    return true;
-                } catch (error) {
-                    document.querySelector('[style*="position: fixed"]')?.remove();
-                    console.error('Error enviando a Google Sheets:', error);
-                    alert(`❌ Error al enviar a Google Sheets\\n\\n${error.message}\\n\\nVerifica que:\\n• La URL del Apps Script sea correcta\\n• El script esté desplegado como "web app"\\n• Tengas permisos de escritura`);
-                    return false;
+                // Crear iframe invisible
+                let iframe = document.getElementById('hidden_iframe');
+                if (!iframe) {
+                    iframe = document.createElement('iframe');
+                    iframe.id = 'hidden_iframe';
+                    iframe.name = 'hidden_iframe';
+                    iframe.style.display = 'none';
+                    document.body.appendChild(iframe);
                 }
+
+                // Manejar respuesta
+                iframe.onload = () => {
+                    setTimeout(() => {
+                        if (loadingAlert.parentNode) {
+                            document.body.removeChild(loadingAlert);
+                        }
+                        alert('✅ ¡Datos enviados a Google Forms!\\n\\n📊 Los datos se han guardado en tu Google Sheet automáticamente.\\n💡 Perfecto para análisis con IA - exporta el CSV cuando quieras analizar.');
+                        form.remove();
+                    }, 1000);
+                };
+
+                // Enviar formulario
+                document.body.appendChild(form);
+                form.submit();
+
+                return true;
             };
 
             const MemoryIndicator = () => {
@@ -1215,9 +1217,9 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                 alert('📄 PDF Profesional generado como HTML\\n\\n✅ Para convertir a PDF:\\n1. Abre el archivo HTML descargado\\n2. Ctrl+P (Imprimir)\\n3. Selecciona "Guardar como PDF"\\n4. ¡Listo! Tendrás un PDF profesional');
             };
 
-            const exportToGoogleSheets = async () => {
-                // Enviar a Google Sheets en lugar de descargar CSV
-                const success = await sendToGoogleSheets();
+            const exportToGoogleForms = () => {
+                // Enviar a Google Forms en lugar de descargar CSV
+                const success = sendToGoogleForms();
                 if (success) {
                     // También guardamos en el historial local
                     saveCurrentParte();
@@ -1752,10 +1754,10 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                         📄 Descargar HTML/PDF
                                     </button>
                                     <button
-                                        onClick={exportToGoogleSheets}
+                                        onClick={exportToGoogleForms}
                                         className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center justify-center gap-2"
                                     >
-                                        📊 Enviar a Google Sheets
+                                        📊 Enviar a Google Forms
                                     </button>
                                 </div>
 
@@ -2035,14 +2037,14 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                                             }
                                                         }}
                                                         className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
-                                                        disabled={!googleSheetsUrl.trim()}
+                                                        disabled={!googleFormsUrl.trim()}
                                                     >
                                                         🧪 Probar conexión
                                                     </button>
                                                     <button
                                                         onClick={() => {
                                                             const instructions = `
-🚀 CÓMO CONFIGURAR GOOGLE SHEETS INTEGRATION
+🚀 CÓMO CONFIGURAR GOOGLE FORMS INTEGRATION
 
 📋 PASOS RÁPIDOS:
 
@@ -2308,30 +2310,30 @@ function doPost(e) {
                                 </div>
 
                                 <div className="p-6 space-y-6">
-                                    {/* Configuración Google Sheets */}
+                                    {/* Configuración Google Forms */}
                                     <div className="bg-green-50 p-6 rounded-lg border-2 border-green-200">
-                                        <h4 className="font-bold mb-4 text-green-800 text-lg">📊 Google Sheets Integration</h4>
+                                        <h4 className="font-bold mb-4 text-green-800 text-lg">📊 Google Forms Integration</h4>
 
                                         <div className="space-y-4">
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    URL de Google Apps Script:
+                                                    URL de Google Forms (formResponse):
                                                 </label>
                                                 <input
                                                     type="url"
-                                                    value={googleSheetsUrl}
-                                                    onChange={(e) => saveGoogleSheetsUrl(e.target.value)}
-                                                    placeholder="https://script.google.com/macros/s/..."
+                                                    value={googleFormsUrl}
+                                                    onChange={(e) => saveGoogleFormsUrl(e.target.value)}
+                                                    placeholder="https://docs.google.com/forms/d/e/.../formResponse"
                                                     className="w-full px-4 py-3 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                                                 />
                                             </div>
 
-                                            {googleSheetsUrl && (
+                                            {googleFormsUrl && (
                                                 <div className="bg-green-100 p-3 rounded-lg border border-green-300">
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-green-600">✅</span>
                                                         <span className="text-sm text-green-800 font-medium">
-                                                            URL configurada - Los partes se enviarán automáticamente
+                                                            URL configurada - Los partes se enviarán automáticamente a Google Forms
                                                         </span>
                                                     </div>
                                                 </div>
@@ -2389,7 +2391,7 @@ function doPost(e) {
                                                 <button
                                                     onClick={() => {
                                                         const instructions = `
-🚀 CÓMO CONFIGURAR GOOGLE SHEETS INTEGRATION
+🚀 CÓMO CONFIGURAR GOOGLE FORMS INTEGRATION
 
 📋 PASOS RÁPIDOS:
 
