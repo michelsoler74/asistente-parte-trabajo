@@ -244,6 +244,9 @@ ${formData.tareasPendientes ? `📋 TAREAS PENDIENTES:\n${formData.tareasPendien
                 }
 
                 try {
+                    // Primero generar el PDF
+                    await exportToPDF();
+
                     // Preparar resumen del parte para WhatsApp (más conciso)
                     const totalHoras = formData.operarios?.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0) || 0;
                     const fechaFormateada = new Date(formData.fecha).toLocaleDateString('es-ES');
@@ -265,6 +268,8 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
 
 📊 Adjuntos: ${formData.imagenes?.length || 0} fotos, ${formData.albaranes?.length || 0} docs
 
+📄 *PDF descargado automáticamente para adjuntar*
+
 📱 _Enviado desde App Móvil_`;
 
                     // Limpiar número de WhatsApp (quitar espacios, guiones, etc.)
@@ -276,7 +281,7 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
                     // Abrir WhatsApp
                     window.open(whatsappLink, '_blank');
 
-                    alert('📱 WhatsApp abierto\n\n✅ Se ha preparado el mensaje\n📄 Envía también el PDF por separado si es necesario\n💾 El parte se ha guardado localmente');
+                    alert('📱 WhatsApp abierto con envío completo\n\n✅ Se ha preparado el mensaje\n📄 El PDF se ha descargado automáticamente\n📎 Adjunta también el archivo PDF descargado\n💾 El parte se ha guardado localmente');
 
                     // Guardar en historial local
                     saveToHistory();
@@ -480,10 +485,26 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
             };
 
             const handleVoiceInput = (fieldName, transcript) => {
+                console.log('🎤 Voz recibida:', { fieldName, transcript });
                 if (transcript) {
-                    const currentValue = formData[fieldName] || '';
-                    const newValue = currentValue + (currentValue ? ' ' : '') + transcript;
-                    handleInputChange(fieldName, newValue);
+                    // Manejar campos especiales de operarios
+                    if (fieldName.startsWith('operario_')) {
+                        const parts = fieldName.split('_');
+                        const operarioIndex = parseInt(parts[1]);
+                        const operarioField = parts[2];
+
+                        if (operarioField === 'nombre') {
+                            const currentValue = formData.operarios[operarioIndex]?.nombre || '';
+                            const newValue = currentValue + (currentValue ? ' ' : '') + transcript;
+                            updateOperario(operarioIndex, 'nombre', newValue);
+                        }
+                    } else {
+                        // Manejar campos normales
+                        const currentValue = formData[fieldName] || '';
+                        const newValue = currentValue + (currentValue ? ' ' : '') + transcript;
+                        console.log('📝 Actualizando campo:', { fieldName, currentValue, newValue });
+                        handleInputChange(fieldName, newValue);
+                    }
                 }
             };
 
@@ -1108,39 +1129,86 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
                             <div className="space-y-6">
                                 <div>
                                     <label className="block text-sm font-medium mb-3">📷 Fotos del trabajo realizado</label>
-                                    <input
-                                        type="file"
-                                        multiple
-                                        accept="image/*"
-                                        capture="environment"
-                                        onChange={async (e) => {
-                                            const files = Array.from(e.target.files);
-                                            const processFiles = async () => {
-                                                const processedImages = [];
 
-                                                for (const file of files) {
-                                                    try {
-                                                        const base64 = await convertToBase64(file);
-                                                        processedImages.push({
-                                                            name: file.name,
-                                                            size: file.size,
-                                                            type: file.type,
-                                                            data: base64,
-                                                            timestamp: new Date().toISOString()
-                                                        });
-                                                    } catch (error) {
-                                                        console.error('Error procesando imagen:', file.name, error);
-                                                    }
-                                                }
+                                    {/* Botones de opciones */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                                        {/* Tomar foto con cámara */}
+                                        <div>
+                                            <label className="block text-xs text-gray-600 mb-1">Tomar foto nueva:</label>
+                                            <input
+                                                type="file"
+                                                multiple
+                                                accept="image/*"
+                                                capture="environment"
+                                                onChange={async (e) => {
+                                                    const files = Array.from(e.target.files);
+                                                    const processFiles = async () => {
+                                                        const processedImages = [];
 
-                                                const allImages = [...(formData.imagenes || []), ...processedImages];
-                                                handleInputChange('imagenes', allImages);
-                                            };
+                                                        for (const file of files) {
+                                                            try {
+                                                                const base64 = await convertToBase64(file);
+                                                                processedImages.push({
+                                                                    name: file.name,
+                                                                    size: file.size,
+                                                                    type: file.type,
+                                                                    data: base64,
+                                                                    timestamp: new Date().toISOString()
+                                                                });
+                                                            } catch (error) {
+                                                                console.error('Error procesando imagen:', file.name, error);
+                                                            }
+                                                        }
 
-                                            processFiles();
-                                        }}
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                    />
+                                                        const allImages = [...(formData.imagenes || []), ...processedImages];
+                                                        handleInputChange('imagenes', allImages);
+                                                    };
+
+                                                    processFiles();
+                                                    e.target.value = '';
+                                                }}
+                                                className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-blue-50"
+                                            />
+                                        </div>
+
+                                        {/* Seleccionar desde galería */}
+                                        <div>
+                                            <label className="block text-xs text-gray-600 mb-1">Seleccionar desde galería:</label>
+                                            <input
+                                                type="file"
+                                                multiple
+                                                accept="image/*"
+                                                onChange={async (e) => {
+                                                    const files = Array.from(e.target.files);
+                                                    const processFiles = async () => {
+                                                        const processedImages = [];
+
+                                                        for (const file of files) {
+                                                            try {
+                                                                const base64 = await convertToBase64(file);
+                                                                processedImages.push({
+                                                                    name: file.name,
+                                                                    size: file.size,
+                                                                    type: file.type,
+                                                                    data: base64,
+                                                                    timestamp: new Date().toISOString()
+                                                                });
+                                                            } catch (error) {
+                                                                console.error('Error procesando imagen:', file.name, error);
+                                                            }
+                                                        }
+
+                                                        const allImages = [...(formData.imagenes || []), ...processedImages];
+                                                        handleInputChange('imagenes', allImages);
+                                                    };
+
+                                                    processFiles();
+                                                    e.target.value = '';
+                                                }}
+                                                className="w-full p-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-green-50"
+                                            />
+                                        </div>
+                                    </div>
 
                                     {formData.imagenes && formData.imagenes.length > 0 && (
                                         <div className="mt-3">
@@ -1191,33 +1259,81 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
                             <div className="space-y-6">
                                 <div>
                                     <label className="block text-sm font-medium mb-3">📄 Albaranes y documentos</label>
-                                    <input
-                                        type="file"
-                                        multiple
-                                        accept="image/*"
-                                        onChange={(e) => {
-                                            const files = Array.from(e.target.files);
-                                            files.forEach(file => {
-                                                const reader = new FileReader();
-                                                reader.onload = (event) => {
-                                                    const newAlbaran = {
-                                                        name: file.name,
-                                                        url: event.target.result,
-                                                        data: event.target.result,
-                                                        size: file.size,
-                                                        type: file.type,
-                                                        category: 'albaran'
-                                                    };
-                                                    const currentAlbaranes = formData.albaranes || [];
-                                                    const newAlbaranes = [...currentAlbaranes, newAlbaran];
-                                                    setFormData({...formData, albaranes: newAlbaranes});
-                                                };
-                                                reader.readAsDataURL(file);
-                                            });
-                                            e.target.value = '';
-                                        }}
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                    />
+
+                                    {/* Botones de opciones para albaranes */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                                        {/* Capturar nuevo documento */}
+                                        <div>
+                                            <label className="block text-xs text-gray-600 mb-1">Capturar documento nuevo:</label>
+                                            <input
+                                                type="file"
+                                                multiple
+                                                accept="image/*"
+                                                capture="environment"
+                                                onChange={(e) => {
+                                                    const files = Array.from(e.target.files);
+                                                    files.forEach(file => {
+                                                        const reader = new FileReader();
+                                                        reader.onload = (event) => {
+                                                            const newAlbaran = {
+                                                                name: file.name,
+                                                                url: event.target.result,
+                                                                data: event.target.result,
+                                                                size: file.size,
+                                                                type: file.type,
+                                                                category: 'albaran'
+                                                            };
+                                                            const currentAlbaranes = formData.albaranes || [];
+                                                            const newAlbaranes = [...currentAlbaranes, newAlbaran];
+                                                            setFormData({...formData, albaranes: newAlbaranes});
+                                                        };
+                                                        reader.readAsDataURL(file);
+                                                    });
+                                                    e.target.value = '';
+                                                }}
+                                                className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-blue-50"
+                                            />
+                                        </div>
+
+                                        {/* Seleccionar archivo existente */}
+                                        <div>
+                                            <label className="block text-xs text-gray-600 mb-1">Seleccionar archivo existente:</label>
+                                            <input
+                                                type="file"
+                                                multiple
+                                                accept="image/*,application/pdf,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                                                onChange={(e) => {
+                                                    const files = Array.from(e.target.files);
+                                                    files.forEach(file => {
+                                                        const reader = new FileReader();
+                                                        reader.onload = (event) => {
+                                                            const newAlbaran = {
+                                                                name: file.name,
+                                                                url: event.target.result,
+                                                                data: event.target.result,
+                                                                size: file.size,
+                                                                type: file.type,
+                                                                category: file.type.startsWith('image/') ? 'imagen' : 'documento'
+                                                            };
+                                                            const currentAlbaranes = formData.albaranes || [];
+                                                            const newAlbaranes = [...currentAlbaranes, newAlbaran];
+                                                            setFormData({...formData, albaranes: newAlbaranes});
+                                                        };
+                                                        reader.readAsDataURL(file);
+                                                    });
+                                                    e.target.value = '';
+                                                }}
+                                                className="w-full p-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-green-50"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Información sobre tipos de archivo */}
+                                    <div className="bg-gray-50 p-3 rounded-lg">
+                                        <p className="text-xs text-gray-600">
+                                            💡 <strong>Tipos admitidos:</strong> Imágenes (JPG, PNG, etc.), PDF, Word, Excel, archivos de texto
+                                        </p>
+                                    </div>
 
                                     {formData.albaranes && formData.albaranes.length > 0 && (
                                         <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
