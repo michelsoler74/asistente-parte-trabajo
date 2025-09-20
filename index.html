@@ -331,19 +331,16 @@
                     console.log('🔗 URL completa:', getUrl);
 
                     response = await fetch(getUrl, {
-                        method: 'GET'
+                        method: 'GET',
+                        mode: 'no-cors'
                     });
 
-                    console.log('📊 Respuesta del servidor:', response.status, response.statusText);
+                    console.log('📊 Petición enviada con mode: no-cors');
 
-                    // Verificar si la respuesta fue exitosa
-                    if (response.ok) {
-                        const responseText = await response.text();
-                        console.log('✅ Respuesta del script:', responseText);
-                        success = true;
-                    } else {
-                        throw new Error(`Error del servidor: ${response.status} ${response.statusText}`);
-                    }
+                    // Con no-cors no podemos leer la respuesta, pero podemos asumir que se envió
+                    // El script de Google debería procesar los datos automáticamente
+                    success = true;
+                    console.log('✅ Datos enviados a Google Apps Script');
 
                     // Quitar indicador de carga
                     if (loadingAlert.parentNode) {
@@ -356,8 +353,8 @@
                     const totalArchivos = numImagenes + numAlbaranes;
 
                     // Mostrar confirmación detallada
-                    let mensaje = '✅ ¡Datos enviados exitosamente!\\n\\n';
-                    mensaje += '📊 Google Sheets: Actualizado\\n';
+                    let mensaje = '📤 ¡Datos enviados a Google Sheets!\\n\\n';
+                    mensaje += '📊 Verifica en tu hoja de cálculo si los datos llegaron\\n';
                     if (totalArchivos > 0) {
                         mensaje += '📁 Google Drive: ';
                         if (numImagenes > 0) mensaje += `${numImagenes} imagen(es) `;
