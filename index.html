@@ -102,6 +102,7 @@
             const [maxPartesLimit, setMaxPartesLimit] = useState(50);
 
             const recognitionRef = useRef(null);
+            const currentFieldRef = useRef('');
 
             // Cargar configuración al inicializar
             useEffect(() => {
@@ -151,13 +152,18 @@
 
                         console.log('🎤 finalTranscript:', finalTranscript);
                         console.log('🎤 interimTranscript:', interimTranscript);
-                        console.log('🎤 currentField:', currentField);
+                        console.log('🎤 currentField (estado):', currentField);
+                        console.log('🎤 currentFieldRef.current:', currentFieldRef.current);
 
                         // Actualizar con cualquier transcripción disponible
                         const textToProcess = finalTranscript || interimTranscript;
-                        if (textToProcess && textToProcess.trim()) {
-                            console.log('🎤 LLAMANDO handleVoiceInput con:', currentField, textToProcess.trim());
-                            handleVoiceInput(currentField, textToProcess.trim());
+                        const fieldToUse = currentFieldRef.current || currentField;
+
+                        if (textToProcess && textToProcess.trim() && fieldToUse) {
+                            console.log('🎤 LLAMANDO handleVoiceInput con:', fieldToUse, textToProcess.trim());
+                            handleVoiceInput(fieldToUse, textToProcess.trim());
+                        } else {
+                            console.log('❌ No se puede procesar - textToProcess:', textToProcess, 'fieldToUse:', fieldToUse);
                         }
                     };
 
@@ -168,12 +174,14 @@
                     recognitionRef.current.onend = () => {
                         setIsListening(false);
                         setCurrentField('');
+                        currentFieldRef.current = '';
                     };
 
                     recognitionRef.current.onerror = (event) => {
                         console.error('Error de reconocimiento de voz:', event.error);
                         setIsListening(false);
                         setCurrentField('');
+                        currentFieldRef.current = '';
                     };
                 } else {
                     console.error('❌ Reconocimiento de voz NO soportado en este navegador');
@@ -505,7 +513,9 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
                 console.log('🎤 Configurando estados...');
                 setIsListening(true);
                 setCurrentField(fieldName);
+                currentFieldRef.current = fieldName;
                 console.log('🎤 Estados configurados - isListening: true, currentField:', fieldName);
+                console.log('🎤 currentFieldRef.current:', currentFieldRef.current);
 
                 // Esperar un momento antes de iniciar
                 setTimeout(() => {
