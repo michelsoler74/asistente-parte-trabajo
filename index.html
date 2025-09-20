@@ -320,14 +320,40 @@
 
                     console.log('📊 ENVIANDO A GOOGLE APPS SCRIPT:', dataToSend);
 
-                    // Enviar datos usando POST al Google Apps Script
-                    const response = await fetch(sheetsUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(dataToSend)
-                    });
+                    let response;
+                    let success = false;
+
+                    try {
+                        // Intentar primero con POST
+                        console.log('🔄 Intentando POST...');
+                        response = await fetch(sheetsUrl, {
+                            method: 'POST',
+                            mode: 'no-cors',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(dataToSend)
+                        });
+                        success = true;
+                        console.log('✅ POST exitoso');
+                    } catch (postError) {
+                        console.log('❌ POST falló, intentando GET...', postError.message);
+
+                        // Si POST falla, intentar con GET
+                        try {
+                            const params = new URLSearchParams(dataToSend);
+                            const getUrl = `${sheetsUrl}?${params.toString()}`;
+                            response = await fetch(getUrl, {
+                                method: 'GET',
+                                mode: 'no-cors'
+                            });
+                            success = true;
+                            console.log('✅ GET exitoso como respaldo');
+                        } catch (getError) {
+                            console.error('❌ Ambos métodos fallaron:', getError.message);
+                            throw getError;
+                        }
+                    }
 
                     // Quitar indicador de carga
                     if (loadingAlert.parentNode) {
