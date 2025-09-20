@@ -1302,7 +1302,7 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                         <p style="margin: 0; font-size: 14px; color: #dc2626; font-weight: bold;">📄 Documento ${index + 1}</p>
                                         <p style="margin: 5px 0 0 0; font-size: 12px; color: #374151; font-weight: bold;">${albaran.name}</p>
                                         <p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b;">Tamaño: ${albaran.size ? (albaran.size / 1024 / 1024).toFixed(2) + ' MB' : 'No disponible'}</p>
-                                        <p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b;">Tipo: ${albaran.type || 'Documento'}</p>
+                                        <p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b;">Tipo: ${albaran.category || albaran.type || 'Documento'}</p>
                                     </div>
                                 </div>
                             </div>
@@ -1855,7 +1855,8 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                                             url: event.target.result,
                                                             data: event.target.result,
                                                             size: file.size,
-                                                            type: 'albaran'
+                                                            type: file.type,
+                                                            category: 'albaran'
                                                         };
                                                         const currentAlbaranes = formData.albaranes || [];
                                                         const newAlbaranes = [...currentAlbaranes, newAlbaran];
