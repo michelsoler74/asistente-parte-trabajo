@@ -2316,52 +2316,34 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                                 <button
                                                     onClick={() => {
                                                         if (!googleFormsUrl.trim()) {
-                                                            alert('⚠️ Primero configura la URL de Google Forms');
+                                                            alert('⚠️ Primero configura la URL del Google Apps Script');
                                                             return;
                                                         }
 
-                                                        // Crear formulario de prueba usando el mismo método que el envío real
-                                                        const form = document.createElement('form');
-                                                        form.method = 'POST';
-                                                        form.action = googleFormsUrl;
-                                                        form.target = '_blank'; // Abrir en nueva pestaña para ver resultado
-                                                        form.style.display = 'none';
-
-                                                        // Datos de prueba usando los entry IDs reales
-                                                        const testFields = {
-                                                            'entry.1609146625': 'TEST - Prueba de conexión', // Proyecto
-                                                            'entry.1854148894': new Date().toISOString().split('T')[0], // Fecha
-                                                            'entry.506300148': '8', // Total de Horas
-                                                            'entry.344006223': '1', // Num Operarios
-                                                            'entry.2113503178': 'Usuario Test: 8h', // Nombre de Operarios
-                                                            'entry.1661225070': 'Prueba de conexión con Google Forms', // Trabajos Realizados
-                                                            'entry.610430841': 'Ninguno', // Materiales
-                                                            'entry.930728203': '', // Incidentes
-                                                            'entry.123490185': 'Prueba realizada desde configuración', // Observaciones
-                                                            'entry.1028727727': '', // Tareas Pendientes
-                                                            'entry.1499739742': '0', // Imagenes
-                                                            'entry.1652758369': '0' // Albaranes
+                                                        // Datos de prueba para Google Apps Script
+                                                        const testData = {
+                                                            nombreTrabajo: 'TEST - Prueba de conexión',
+                                                            fecha: new Date().toISOString().split('T')[0],
+                                                            totalHoras: '8',
+                                                            numOperarios: '1',
+                                                            listaOperarios: 'Usuario Test: 8h',
+                                                            trabajosRealizados: 'Prueba de conexión con Google Apps Script',
+                                                            materialesUtilizados: 'Ninguno',
+                                                            incidencias: '',
+                                                            observaciones: 'Prueba realizada desde configuración',
+                                                            tareasPendientes: '',
+                                                            infoImagenes: 'Sin imágenes',
+                                                            infoAlbaranes: 'Sin albaranes'
                                                         };
 
-                                                        // Añadir campos al formulario
-                                                        Object.keys(testFields).forEach(key => {
-                                                            const input = document.createElement('input');
-                                                            input.type = 'hidden';
-                                                            input.name = key;
-                                                            input.value = testFields[key];
-                                                            form.appendChild(input);
-                                                        });
+                                                        // Crear URL con parámetros GET
+                                                        const params = new URLSearchParams(testData);
+                                                        const testUrl = `${googleFormsUrl}?${params.toString()}`;
 
-                                                        document.body.appendChild(form);
+                                                        alert('🧪 Enviando datos de prueba...\\n\\nSe abrirá una nueva pestaña con el resultado.\\n\\nSi ves un JSON con "status": "success", ¡la conexión funciona!');
 
-                                                        alert('🧪 Enviando datos de prueba...\\n\\nSe abrirá una nueva pestaña con el resultado.\\n\\nSi ves un mensaje de confirmación de Google Forms, ¡la conexión funciona!');
-
-                                                        form.submit();
-
-                                                        // Limpiar formulario después de 1 segundo
-                                                        setTimeout(() => {
-                                                            document.body.removeChild(form);
-                                                        }, 1000);
+                                                        // Abrir en nueva pestaña
+                                                        window.open(testUrl, '_blank');
                                                     }}
                                                     className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300"
                                                     disabled={!googleFormsUrl.trim()}
