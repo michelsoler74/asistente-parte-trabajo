@@ -121,12 +121,15 @@
                 if (savedLimit) setMaxPartesLimit(parseInt(savedLimit));
 
                 // Inicializar reconocimiento de voz
+                console.log('🔍 Verificando soporte de reconocimiento de voz...');
                 if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                    console.log('✅ Reconocimiento de voz soportado');
                     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
                     recognitionRef.current = new SpeechRecognition();
                     recognitionRef.current.continuous = true;
                     recognitionRef.current.interimResults = true;
                     recognitionRef.current.lang = 'es-ES';
+                    console.log('✅ Configuración de voz completada');
 
                     recognitionRef.current.onresult = (event) => {
                         let interimTranscript = '';
@@ -149,16 +152,45 @@
                         }
                     };
 
+                    recognitionRef.current.onstart = () => {
+                        console.log('🎤 Reconocimiento iniciado correctamente');
+                    };
+
                     recognitionRef.current.onend = () => {
+                        console.log('🔴 Reconocimiento terminado');
                         setIsListening(false);
                         setCurrentField('');
                     };
 
                     recognitionRef.current.onerror = (event) => {
-                        console.error('Error en reconocimiento de voz:', event.error);
+                        console.error('❌ ERROR EN RECONOCIMIENTO DE VOZ:', event.error);
+                        console.error('❌ Detalles del error:', event);
                         setIsListening(false);
                         setCurrentField('');
+
+                        // Mostrar error específico al usuario
+                        let errorMessage = 'Error en reconocimiento de voz: ';
+                        switch(event.error) {
+                            case 'not-allowed':
+                                errorMessage += 'Permisos de micrófono denegados. Ve a configuración del navegador.';
+                                break;
+                            case 'no-speech':
+                                errorMessage += 'No se detectó habla. Intenta hablar más cerca del micrófono.';
+                                break;
+                            case 'audio-capture':
+                                errorMessage += 'No se pudo acceder al micrófono.';
+                                break;
+                            case 'network':
+                                errorMessage += 'Error de red. Verifica tu conexión a internet.';
+                                break;
+                            default:
+                                errorMessage += event.error;
+                        }
+                        alert(errorMessage);
                     };
+                } else {
+                    console.error('❌ Reconocimiento de voz NO soportado en este navegador');
+                    alert('❌ Tu navegador no soporta reconocimiento de voz\n\n✅ Navegadores compatibles:\n• Chrome\n• Edge\n• Safari (iOS)\n\n❌ No funciona en:\n• Firefox\n• Modo incógnito (algunas versiones)');
                 }
 
                 return () => {
