@@ -1267,10 +1267,10 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
             <div style="margin: 20px 0;">
                 ${formData.imagenes.map((imagen, index) => `
                     <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; background: white; margin: 15px 0; text-align: center;">
-                        <img src="${imagen.url}" alt="${imagen.name}" style="max-width: 100%; width: auto; height: auto; border-radius: 4px; margin: 0 auto 10px auto; display: block;">
+                        <img src="${imagen.data || imagen.url}" alt="${imagen.name}" style="max-width: 100%; width: auto; height: auto; border-radius: 4px; margin: 0 auto 10px auto; display: block;">
                         <p style="margin: 0; font-size: 12px; color: #64748b; font-weight: bold;">📷 Imagen ${index + 1}</p>
                         <p style="margin: 5px 0 0 0; font-size: 11px; color: #64748b;">${imagen.name}</p>
-                        <p style="margin: 2px 0 0 0; font-size: 10px; color: #94a3b8;">${(imagen.size / 1024 / 1024).toFixed(2)} MB</p>
+                        <p style="margin: 2px 0 0 0; font-size: 10px; color: #94a3b8;">${imagen.size ? (imagen.size / 1024 / 1024).toFixed(2) + ' MB' : 'Tamaño no disponible'}</p>
                     </div>
                 `).join('')}
             </div>
@@ -1286,10 +1286,10 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                     if (albaran.type && albaran.type.startsWith('image/')) {
                         return `
                             <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin: 15px 0; background: white;">
-                                <img src="${albaran.url}" alt="${albaran.name}" style="max-width: 100%; width: auto; height: auto; border-radius: 4px; margin: 0 auto 10px auto; display: block;">
+                                <img src="${albaran.data || albaran.url}" alt="${albaran.name}" style="max-width: 100%; width: auto; height: auto; border-radius: 4px; margin: 0 auto 10px auto; display: block;">
                                 <p style="margin: 0; font-size: 12px; color: #dc2626; font-weight: bold;">📄 Documento ${index + 1}</p>
                                 <p style="margin: 5px 0 0 0; font-size: 11px; color: #64748b;">${albaran.name}</p>
-                                <p style="margin: 2px 0 0 0; font-size: 10px; color: #94a3b8;">${(albaran.size / 1024 / 1024).toFixed(2)} MB</p>
+                                <p style="margin: 2px 0 0 0; font-size: 10px; color: #94a3b8;">${albaran.size ? (albaran.size / 1024 / 1024).toFixed(2) + ' MB' : 'Tamaño no disponible'}</p>
                             </div>
                         `;
                     } else {
@@ -1301,7 +1301,7 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                     <div>
                                         <p style="margin: 0; font-size: 14px; color: #dc2626; font-weight: bold;">📄 Documento ${index + 1}</p>
                                         <p style="margin: 5px 0 0 0; font-size: 12px; color: #374151; font-weight: bold;">${albaran.name}</p>
-                                        <p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b;">Tamaño: ${(albaran.size / 1024 / 1024).toFixed(2)} MB</p>
+                                        <p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b;">Tamaño: ${albaran.size ? (albaran.size / 1024 / 1024).toFixed(2) + ' MB' : 'No disponible'}</p>
                                         <p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b;">Tipo: ${albaran.type || 'Documento'}</p>
                                     </div>
                                 </div>
@@ -1853,6 +1853,8 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                                         const newAlbaran = {
                                                             name: file.name,
                                                             url: event.target.result,
+                                                            data: event.target.result,
+                                                            size: file.size,
                                                             type: 'albaran'
                                                         };
                                                         const currentAlbaranes = formData.albaranes || [];
