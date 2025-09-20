@@ -2374,30 +2374,30 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                 </div>
 
                                 <div className="p-6 space-y-6">
-                                    {/* Configuración Google Forms */}
-                                    <div className="bg-green-50 p-6 rounded-lg border-2 border-green-200">
-                                        <h4 className="font-bold mb-4 text-green-800 text-lg">📊 Google Forms Integration</h4>
+                                    {/* Configuración Google Apps Script */}
+                                    <div className="bg-blue-50 p-6 rounded-lg border-2 border-blue-200">
+                                        <h4 className="font-bold mb-4 text-blue-800 text-lg">📊 Google Apps Script Integration</h4>
 
                                         <div className="space-y-4">
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    URL de Google Forms (formResponse):
+                                                    URL de Google Apps Script (exec):
                                                 </label>
                                                 <input
                                                     type="url"
                                                     value={googleFormsUrl}
                                                     onChange={(e) => saveGoogleFormsUrl(e.target.value)}
-                                                    placeholder="https://docs.google.com/forms/d/e/.../formResponse"
-                                                    className="w-full px-4 py-3 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                    placeholder="https://script.google.com/macros/s/.../exec"
+                                                    className="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                                 />
                                             </div>
 
                                             {googleFormsUrl && (
-                                                <div className="bg-green-100 p-3 rounded-lg border border-green-300">
+                                                <div className="bg-blue-100 p-3 rounded-lg border border-blue-300">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="text-green-600">✅</span>
-                                                        <span className="text-sm text-green-800 font-medium">
-                                                            URL configurada - Los partes se enviarán automáticamente a Google Forms
+                                                        <span className="text-blue-600">✅</span>
+                                                        <span className="text-sm text-blue-800 font-medium">
+                                                            URL configurada - Los partes se enviarán automáticamente a Google Sheets vía Apps Script
                                                         </span>
                                                     </div>
                                                 </div>
@@ -2419,12 +2419,15 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                                             numOperarios: '1',
                                                             listaOperarios: 'Usuario Test: 8h',
                                                             trabajosRealizados: 'Prueba de conexión con Google Apps Script',
-                                                            materialesUtilizados: 'Ninguno',
-                                                            incidencias: '',
-                                                            observaciones: 'Prueba realizada desde configuración',
-                                                            tareasPendientes: '',
-                                                            infoImagenes: 'Sin imágenes',
-                                                            infoAlbaranes: 'Sin albaranes'
+                                                            materialesUtilizados: 'Ninguno - Solo prueba',
+                                                            incidencias: 'Sin incidencias',
+                                                            observaciones: 'Prueba realizada desde configuración del sistema',
+                                                            tareasPendientes: 'Sin tareas pendientes',
+                                                            infoImagenes: 'Sin imágenes adjuntas',
+                                                            infoAlbaranes: 'Sin albaranes adjuntos',
+                                                            numImagenes: '0',
+                                                            numAlbaranes: '0',
+                                                            nombresCarpetas: 'TEST - Prueba de conexión'
                                                         };
 
                                                         // Crear URL con parámetros GET
@@ -2436,7 +2439,7 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                                         // Abrir en nueva pestaña
                                                         window.open(testUrl, '_blank');
                                                     }}
-                                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300"
+                                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300"
                                                     disabled={!googleFormsUrl.trim()}
                                                 >
                                                     🧪 Probar conexión
@@ -2445,37 +2448,96 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
                                                 <button
                                                     onClick={() => {
                                                         const instructions = `
-🚀 CÓMO CONFIGURAR GOOGLE FORMS INTEGRATION
+🚀 CÓMO CONFIGURAR GOOGLE APPS SCRIPT INTEGRATION
 
 📋 PASOS DETALLADOS:
 
-1️⃣ Ve a Google Forms (forms.google.com)
-2️⃣ Crea un nuevo formulario llamado "Partes Diarios de Trabajo"
-3️⃣ Añade EXACTAMENTE estos 12 campos (todos como "Respuesta corta"):
-   • Proyecto
-   • Fecha
-   • Total de Horas
-   • Num Operarios
-   • Nombre de Operarios
-   • Trabajos Realizados
-   • Materiales
-   • Incidentes
-   • Observaciones
-   • Tareas Pendientes
-   • Imagenes
-   • Albaranes
+1️⃣ Ve a Google Sheets (sheets.google.com)
+2️⃣ Crea una nueva hoja de cálculo llamada "Partes Diarios de Trabajo"
+3️⃣ Añade EXACTAMENTE estos encabezados en la fila 1 (columnas A-N):
+   A: Fecha/Hora Envío
+   B: Proyecto
+   C: Fecha Trabajo
+   D: Total Horas
+   E: Num Operarios
+   F: Lista Operarios
+   G: Trabajos Realizados
+   H: Materiales
+   I: Incidencias
+   J: Observaciones
+   K: Tareas Pendientes
+   L: Info Imágenes
+   M: Info Albaranes
+   N: Carpeta Proyecto
 
-4️⃣ Haz clic en los 3 puntos → "Obtener enlace rellenado previamente"
-5️⃣ Rellena CUALQUIER valor en TODOS los campos (importante: no dejes ninguno vacío)
-6️⃣ Haz clic en "Obtener enlace"
-7️⃣ Copia la URL completa que aparece
-8️⃣ Cambia "viewform" por "formResponse" en la URL
-9️⃣ Pega esa URL arriba en el campo de configuración
+4️⃣ Ve a "Extensiones" → "Apps Script"
+5️⃣ Borra el código por defecto y pega este código:
+
+function doGet(e) {
+  try {
+    const SHEET_ID = 'TU_ID_DE_SHEET_AQUÍ';
+    const sheet = SpreadsheetApp.openById(SHEET_ID).getActiveSheet();
+
+    if (!e.parameter || Object.keys(e.parameter).length === 0) {
+      return ContentService
+        .createTextOutput('✅ Apps Script funcionando - ' + new Date().toLocaleString('es-ES'))
+        .setMimeType(ContentService.MimeType.TEXT);
+    }
+
+    const params = e.parameter;
+    const totalHoras = parseFloat(params.totalHoras) || 0;
+    const timestamp = new Date().toLocaleString('es-ES');
+
+    const fila = [
+      timestamp,
+      params.nombreTrabajo || 'Sin especificar',
+      params.fecha || '',
+      totalHoras,
+      parseInt(params.numOperarios) || 0,
+      params.listaOperarios || 'Sin operarios',
+      params.trabajosRealizados || 'Sin especificar',
+      params.materialesUtilizados || 'Sin materiales',
+      params.incidencias || 'Sin incidencias',
+      params.observaciones || 'Sin observaciones',
+      params.tareasPendientes || 'Sin tareas pendientes',
+      params.infoImagenes || 'Sin imágenes',
+      params.infoAlbaranes || 'Sin albaranes',
+      params.nombresCarpetas || 'Sin carpeta'
+    ];
+
+    sheet.appendRow(fila);
+
+    return ContentService
+      .createTextOutput(JSON.stringify({
+        status: 'success',
+        message: 'Datos guardados correctamente',
+        timestamp: timestamp,
+        fila: sheet.getLastRow()
+      }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    return ContentService
+      .createTextOutput(JSON.stringify({
+        status: 'error',
+        message: error.toString()
+      }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+6️⃣ Reemplaza 'TU_ID_DE_SHEET_AQUÍ' con el ID real de tu hoja de cálculo
+7️⃣ Haz clic en "Implementar" → "Nueva implementación"
+8️⃣ Tipo: "Aplicación web"
+9️⃣ Ejecutar como: "Yo"
+🔟 Acceso: "Cualquier persona"
+1️⃣1️⃣ Copia la URL que termine en "/exec"
+1️⃣2️⃣ Pega esa URL arriba en el campo de configuración
 
 ⚠️ IMPORTANTE:
-- Los campos deben estar en el MISMO ORDEN listado arriba
-- NO cambies los nombres de los campos
-- La URL debe terminar en "formResponse"
+- La URL debe terminar en "/exec"
+- El ID del sheet se encuentra en la URL de tu Google Sheets
+- Los encabezados deben estar EXACTAMENTE como se indica
 
 ✅ ¡Listo! Usa el botón "Probar conexión" para verificar que funciona
                                                         `;
