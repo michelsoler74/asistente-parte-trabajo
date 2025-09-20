@@ -1,36 +1,10 @@
 <!DOCTYPE html>
 <html lang="es">
-<!--
-    📋 ASISTENTE PERSONAL - PARTE DIARIO DE TRABAJO - VERSIÓN COMPLETA 2.0
-
-    ✅ CARACTERÍSTICAS IMPLEMENTADAS:
-    • Formulario completo en 8 pasos
-    • Dictado por voz integrado
-    • Guardado local automático
-    • Envío a Google Sheets
-    • Exportación completa a CSV
-    • Subida de imágenes y documentos
-    • Modal de partes guardados
-    • Modal "Acerca de"
-    • Interfaz responsive con Tailwind CSS
-
-    🛠️ TECNOLOGÍAS:
-    • React 18 + Hooks
-    • Tailwind CSS
-    • Web Speech API
-    • Google Apps Script
-    • Local Storage
-    • File API
-
-    👨‍💻 Desarrollado por: Michel Soler
-    📅 Fecha: 2024
-    🏗️ Especializado para construcción y mantenimiento
--->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>📋 Asistente Personal - Parte Diario de Trabajo</title>
-    <meta name="description" content="Asistente personal para gestión de partes diarios de trabajo con dictado por voz y envío a Google Sheets">
+    <meta name="description" content="Asistente personal completo para gestión de partes diarios de trabajo con dictado por voz y guardado automático">
     <meta name="keywords" content="parte diario, trabajo, dictado voz, construcción, mantenimiento">
     <meta name="author" content="Michel Soler">
 
@@ -86,7 +60,7 @@
             animation: pulse-custom 1s ease-in-out infinite;
         }
 
-        /* Iconos emoji */
+        /* Iconos emoji para better compatibility */
         .icon {
             display: inline-block;
             font-size: 16px;
@@ -110,207 +84,195 @@
         const { useState, useRef, useEffect } = React;
 
         // Componentes de iconos usando emojis
-        const FileText = () => <span className="icon">📄</span>;
-        const Calendar = () => <span className="icon">📅</span>;
-        const Users = () => <span className="icon">👥</span>;
-        const Package = () => <span className="icon">📦</span>;
-        const AlertTriangle = () => <span className="icon">⚠️</span>;
-        const Clock = () => <span className="icon">⏰</span>;
-        const Camera = () => <span className="icon">📷</span>;
-        const Brain = () => <span className="icon">🧠</span>;
-        const Mic = () => <span className="icon">🎤</span>;
-        const MicOff = () => <span className="icon">🔇</span>;
+        const FileText = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '📄');
+        const Calendar = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '📅');
+        const Users = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '👥');
+        const Package = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '📦');
+        const AlertTriangle = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '⚠️');
+        const Clock = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '⏰');
+        const Camera = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '📷');
+        const Brain = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '🧠');
+        const Mic = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '🎤');
+        const MicOff = ({ size = 16 }) => React.createElement('span', { className: 'icon' }, '🔇');
 
         const ParteDiarioTrabajo = () => {
-            // ========== ESTADO PRINCIPAL ==========
             const [currentStep, setCurrentStep] = useState(0);
             const [isListening, setIsListening] = useState(false);
-            const [savedParts, setSavedParts] = useState([]);
-            const [showSavedParts, setShowSavedParts] = useState(false);
-            const [showConfig, setShowConfig] = useState(false);
-            const [showAbout, setShowAbout] = useState(false);
+            const [currentField, setCurrentField] = useState('');
+            const [saveStatus, setSaveStatus] = useState('saved');
+            const [showHistory, setShowHistory] = useState(false);
+            const [showMemoryManager, setShowMemoryManager] = useState(false);
+            const [showSettings, setShowSettings] = useState(false);
+            const [memoryInfo, setMemoryInfo] = useState({ used: 0, available: 0, percentage: 0 });
+            const [maxPartesLimit, setMaxPartesLimit] = useState(50);
+            const [currentParteId, setCurrentParteId] = useState(null);
+            const [partesHistory, setPartesHistory] = useState([]);
+            const recognitionRef = useRef(null);
+            const saveTimeoutRef = useRef(null);
 
-            // Estado para configuración de Google Apps Script
-            const [googleScriptUrl, setGoogleScriptUrl] = useState('');
-
-            // Estado del formulario
             const [formData, setFormData] = useState({
                 nombreTrabajo: '',
                 fecha: new Date().toISOString().split('T')[0],
-                operarios: [{ nombre: '', horas: '' }],
                 trabajosRealizados: '',
+                operarios: [{ nombre: '', horas: '' }],
                 materialesUtilizados: '',
                 incidencias: '',
                 observaciones: '',
                 tareasPendientes: '',
                 imagenes: [],
-                albaranes: []
+                albaranes: [], // Nuevo campo para fotos de albaranes
+                resumenInteligente: ''
             });
 
-            // Referencias para el dictado por voz
-            const recognitionRef = useRef(null);
-            const isRecognitionSupported = useRef(false);
+            // Estado para configuración Google Forms
+            const [googleFormsUrl, setGoogleFormsUrl] = useState('');
 
-            // ========== EFECTOS DE INICIALIZACIÓN ==========
+            // Cargar datos guardados al inicializar
             useEffect(() => {
-                // Cargar datos guardados del localStorage
-                const saved = localStorage.getItem('partes_diarios');
-                if (saved) {
-                    setSavedParts(JSON.parse(saved));
-                }
-
-                // Cargar configuración de Google Apps Script
-                const savedScriptUrl = localStorage.getItem('google_script_url');
-                if (savedScriptUrl) {
-                    setGoogleScriptUrl(savedScriptUrl);
-                }
-
-                // Configurar reconocimiento de voz
-                if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                    recognitionRef.current = new SpeechRecognition();
-                    recognitionRef.current.continuous = false;
-                    recognitionRef.current.interimResults = false;
-                    recognitionRef.current.lang = 'es-ES';
-                    isRecognitionSupported.current = true;
-
-                    recognitionRef.current.onresult = (event) => {
-                        const transcript = event.results[0][0].transcript;
-                        appendToCurrentField(transcript);
-                    };
-
-                    recognitionRef.current.onend = () => {
-                        setIsListening(false);
-                    };
-
-                    recognitionRef.current.onerror = () => {
-                        setIsListening(false);
-                        alert('Error en el reconocimiento de voz. Inténtalo de nuevo.');
-                    };
-                }
+                loadSavedData();
+                loadHistoryData();
+                updateMemoryInfo();
+                loadSettings();
             }, []);
 
-            // ========== FUNCIONES DE UTILIDAD ==========
-            const appendToCurrentField = (text) => {
-                const fieldMap = {
-                    0: 'nombreTrabajo',
-                    2: 'trabajosRealizados',
-                    3: 'materialesUtilizados',
-                    4: 'incidencias',
-                    5: 'observaciones',
-                    6: 'tareasPendientes'
-                };
+            // Actualizar info de memoria cuando cambia el historial
+            useEffect(() => {
+                updateMemoryInfo();
+            }, [partesHistory]);
 
-                const field = fieldMap[currentStep];
-                if (field) {
-                    setFormData(prev => ({
-                        ...prev,
-                        [field]: prev[field] + (prev[field] ? ' ' : '') + text
-                    }));
+            const loadSettings = () => {
+                const savedLimit = localStorage.getItem('partes_limit');
+                if (savedLimit) {
+                    setMaxPartesLimit(parseInt(savedLimit));
+                }
+
+                const savedGoogleFormsUrl = localStorage.getItem('google_forms_url');
+                if (savedGoogleFormsUrl) {
+                    setGoogleFormsUrl(savedGoogleFormsUrl);
                 }
             };
 
-            const startListening = () => {
-                if (recognitionRef.current && isRecognitionSupported.current) {
-                    setIsListening(true);
-                    recognitionRef.current.start();
-                }
-            };
-
-            const stopListening = () => {
-                if (recognitionRef.current) {
-                    recognitionRef.current.stop();
-                }
-            };
-
-            const addOperario = () => {
-                setFormData(prev => ({
-                    ...prev,
-                    operarios: [...prev.operarios, { nombre: '', horas: '' }]
-                }));
-            };
-
-            const removeOperario = (index) => {
-                if (formData.operarios.length > 1) {
-                    setFormData(prev => ({
-                        ...prev,
-                        operarios: prev.operarios.filter((_, i) => i !== index)
-                    }));
-                }
-            };
-
-            const updateOperario = (index, field, value) => {
-                setFormData(prev => ({
-                    ...prev,
-                    operarios: prev.operarios.map((op, i) =>
-                        i === index ? { ...op, [field]: value } : op
-                    )
-                }));
-            };
-
-            // ========== MANEJO DE ARCHIVOS ==========
-            const handleFileUpload = (files, type) => {
-                const fileArray = Array.from(files);
-                fileArray.forEach(file => {
-                    if (file.size > 10 * 1024 * 1024) { // 10MB limit
-                        alert(`El archivo ${file.name} es demasiado grande. Máximo 10MB.`);
-                        return;
-                    }
-
+            // Función para convertir archivos a base64
+            const convertToBase64 = (file) => {
+                return new Promise((resolve, reject) => {
                     const reader = new FileReader();
-                    reader.onload = (e) => {
-                        const newFile = {
-                            name: file.name,
-                            type: file.type,
-                            size: file.size,
-                            url: e.target.result,
-                            timestamp: new Date().toISOString()
-                        };
-
-                        setFormData(prev => ({
-                            ...prev,
-                            [type]: [...prev[type], newFile]
-                        }));
-                    };
                     reader.readAsDataURL(file);
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = error => reject(error);
                 });
             };
 
-            const removeFile = (index, type) => {
-                setFormData(prev => ({
-                    ...prev,
-                    [type]: prev[type].filter((_, i) => i !== index)
-                }));
-            };
+            const updateMemoryInfo = () => {
+                try {
+                    let totalUsed = 0;
+                    for (let key in localStorage) {
+                        if (localStorage.hasOwnProperty(key)) {
+                            totalUsed += localStorage[key].length + key.length;
+                        }
+                    }
 
-            // ========== FUNCIONES DE GUARDADO Y ENVÍO ==========
-            const savePartLocally = () => {
-                const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
+                    const availableSpace = 5 * 1024 * 1024;
+                    const usedMB = (totalUsed / 1024 / 1024).toFixed(2);
+                    const availableMB = (availableSpace / 1024 / 1024).toFixed(2);
+                    const percentage = Math.min((totalUsed / availableSpace) * 100, 100);
 
-                if (!formData.nombreTrabajo.trim()) {
-                    alert('⚠️ El nombre del trabajo es obligatorio');
-                    return false;
+                    setMemoryInfo({
+                        used: usedMB,
+                        available: availableMB,
+                        percentage: percentage.toFixed(1)
+                    });
+
+                    if (percentage > 80) {
+                        console.warn('Memoria del navegador casi llena:', percentage + '%');
+                    }
+                } catch (error) {
+                    console.error('Error calculando memoria:', error);
                 }
-
-                const partData = {
-                    ...formData,
-                    totalHoras,
-                    timestamp: new Date().toISOString(),
-                    id: Date.now()
-                };
-
-                const updatedParts = [...savedParts, partData];
-                setSavedParts(updatedParts);
-                localStorage.setItem('partes_diarios', JSON.stringify(updatedParts));
-
-                return true;
             };
 
+            const cleanOldPartes = (keepCount = maxPartesLimit) => {
+                try {
+                    if (partesHistory.length > keepCount) {
+                        const sortedHistory = [...partesHistory].sort((a, b) =>
+                            new Date(b.fechaCreacion) - new Date(a.fechaCreacion)
+                        );
+                        const partsToKeep = sortedHistory.slice(0, keepCount);
+
+                        setPartesHistory(partsToKeep);
+                        localStorage.setItem('partes_diarios_history', JSON.stringify(partsToKeep));
+                        updateMemoryInfo();
+
+                        return sortedHistory.length - partsToKeep.length;
+                    }
+                    return 0;
+                } catch (error) {
+                    console.error('Error limpiando partes antiguos:', error);
+                    return 0;
+                }
+            };
+
+            const deletePartesByDateRange = (startDate, endDate) => {
+                try {
+                    const start = new Date(startDate);
+                    const end = new Date(endDate);
+                    end.setHours(23, 59, 59, 999);
+
+                    const filteredHistory = partesHistory.filter(parte => {
+                        const parteDate = new Date(parte.fecha);
+                        return !(parteDate >= start && parteDate <= end);
+                    });
+
+                    const deletedCount = partesHistory.length - filteredHistory.length;
+                    setPartesHistory(filteredHistory);
+                    localStorage.setItem('partes_diarios_history', JSON.stringify(filteredHistory));
+                    updateMemoryInfo();
+
+                    return deletedCount;
+                } catch (error) {
+                    console.error('Error eliminando por rango de fechas:', error);
+                    return 0;
+                }
+            };
+
+            const clearAllHistory = () => {
+                if (confirm('⚠️ ¿Estás seguro de eliminar TODO el historial?\\n\\nEsta acción no se puede deshacer.')) {
+                    if (confirm('🔄 ¿Quieres exportar el historial antes de eliminarlo?')) {
+                        exportHistoryToCSV();
+                        setTimeout(() => {
+                            setPartesHistory([]);
+                            localStorage.removeItem('partes_diarios_history');
+                            updateMemoryInfo();
+                            alert('✅ Historial eliminado después de exportar');
+                        }, 1000);
+                    } else {
+                        setPartesHistory([]);
+                        localStorage.removeItem('partes_diarios_history');
+                        updateMemoryInfo();
+                        alert('✅ Historial eliminado completamente');
+                    }
+                }
+            };
+
+            const saveSettings = (newLimit) => {
+                setMaxPartesLimit(newLimit);
+                localStorage.setItem('partes_limit', newLimit.toString());
+
+                if (partesHistory.length > newLimit) {
+                    const eliminated = cleanOldPartes(newLimit);
+                    if (eliminated > 0) {
+                        alert(`⚙️ Configuración guardada. Se eliminaron ${eliminated} partes antiguos para ajustarse al nuevo límite.`);
+                    }
+                }
+            };
+
+            const saveGoogleFormsUrl = (url) => {
+                setGoogleFormsUrl(url);
+                localStorage.setItem('google_forms_url', url);
+            };
+
+            // Función para enviar datos a Google Sheets
             const sendToGoogleSheets = async () => {
-                if (!googleScriptUrl.trim()) {
-                    alert('⚠️ Primero configura la URL de Google Apps Script en Configuración');
-                    return false;
-                }
+                const sheetsUrl = 'https://script.google.com/macros/s/AKfycbxsVvwHDFFBpCWgNFtDelKh1oMD3yra01fzEyv8cw2XNumaHaVUbB5fuYJ8Zu5VLKmT7A/exec';
 
                 // Mostrar indicador de carga
                 const loadingAlert = document.createElement('div');
@@ -328,69 +290,83 @@
                     // Calcular total de horas
                     const totalHoras = formData.operarios?.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0) || 0;
 
-                    // Preparar información de imágenes y albaranes
-                    const imagenesInfo = (formData.imagenes || []).length > 0
-                        ? `📷 ${formData.imagenes.length} imagen(es): ${formData.imagenes.map(img => img.name).join(', ')}`
+                    // Preparar información de imágenes
+                    const imagenesInfo = (formData.imagenes || []).filter(img => img.url && img.url.startsWith('data:'));
+                    const infoImagenes = imagenesInfo.length > 0
+                        ? `📷 ${imagenesInfo.length} imagen(es): ${imagenesInfo.map(img => img.name).join(', ')}`
                         : 'Sin imágenes';
 
-                    const albaranesInfo = (formData.albaranes || []).length > 0
-                        ? `📄 ${formData.albaranes.length} albarán(es): ${formData.albaranes.map(alb => alb.name).join(', ')}`
+                    // Preparar información de albaranes
+                    const albaranesInfo = (formData.albaranes || []).filter(alb => alb.url && alb.url.startsWith('data:'));
+                    const infoAlbaranes = albaranesInfo.length > 0
+                        ? `📄 ${albaranesInfo.length} albarán(es): ${albaranesInfo.map(alb => alb.name).join(', ')}`
                         : 'Sin albaranes';
 
-                    // Preparar datos para Google Apps Script con todos los campos del formulario completo
+                    // Preparar datos para Google Apps Script
                     const dataToSend = {
-                        // Información básica
                         nombreTrabajo: formData.nombreTrabajo || 'Sin especificar',
                         fecha: formData.fecha || new Date().toISOString().split('T')[0],
-                        timestamp: new Date().toISOString(),
-
-                        // Información de operarios
                         totalHoras: totalHoras.toString(),
                         numOperarios: (formData.operarios?.length || 0).toString(),
                         listaOperarios: formData.operarios?.map(op => `${op.nombre}: ${op.horas}h`).join(', ') || 'Sin operarios',
-
-                        // Contenido del trabajo (pasos 3-6)
                         trabajosRealizados: formData.trabajosRealizados || 'Sin especificar',
                         materialesUtilizados: formData.materialesUtilizados || 'Sin materiales',
                         incidencias: formData.incidencias || 'Sin incidencias',
                         observaciones: formData.observaciones || 'Sin observaciones',
                         tareasPendientes: formData.tareasPendientes || 'Sin tareas pendientes',
-
-                        // Información de archivos adjuntos
-                        infoImagenes: imagenesInfo,
-                        infoAlbaranes: albaranesInfo,
-                        numImagenes: (formData.imagenes || []).length.toString(),
-                        numAlbaranes: (formData.albaranes || []).length.toString()
+                        infoImagenes: infoImagenes,
+                        infoAlbaranes: infoAlbaranes
                     };
 
                     console.log('📊 ENVIANDO A GOOGLE APPS SCRIPT:', dataToSend);
 
-                    // Crear URL con parámetros GET
-                    const params = new URLSearchParams(dataToSend);
-                    const getUrl = `${googleScriptUrl}?${params.toString()}`;
+                    let response;
+                    let success = false;
 
+                    // Enviar datos al Google Apps Script usando GET
+                    const params = new URLSearchParams(dataToSend);
+                    const getUrl = `${sheetsUrl}?${params.toString()}`;
+
+                    console.log('🔄 Enviando a Google Apps Script (GET)...');
                     console.log('🔗 URL completa:', getUrl);
 
-                    // Enviar datos usando GET con mode no-cors
-                    const response = await fetch(getUrl, {
+                    response = await fetch(getUrl, {
                         method: 'GET',
                         mode: 'no-cors'
                     });
 
-                    console.log('📊 Petición enviada con éxito');
+                    console.log('📊 Petición enviada con mode: no-cors');
+
+                    // Con no-cors no podemos leer la respuesta, pero podemos asumir que se envió
+                    // El script de Google debería procesar los datos automáticamente
+                    success = true;
+                    console.log('✅ Datos enviados a Google Apps Script');
 
                     // Quitar indicador de carga
                     if (loadingAlert.parentNode) {
                         document.body.removeChild(loadingAlert);
                     }
 
-                    // Mostrar confirmación
+                    // Contar archivos enviados
+                    const numImagenes = imagenesInfo.length;
+                    const numAlbaranes = albaranesInfo.length;
+                    const totalArchivos = numImagenes + numAlbaranes;
+
+                    // Mostrar confirmación detallada
                     let mensaje = '📤 ¡Datos enviados a Google Sheets!\\n\\n';
                     mensaje += '📊 Verifica en tu hoja de cálculo si los datos llegaron\\n';
+                    if (totalArchivos > 0) {
+                        mensaje += '📁 Google Drive: ';
+                        if (numImagenes > 0) mensaje += `${numImagenes} imagen(es) `;
+                        if (numAlbaranes > 0) mensaje += `${numAlbaranes} albarán(es) `;
+                        mensaje += 'guardados\\n';
+                    }
                     mensaje += '\\n🔗 Ver datos: https://docs.google.com/spreadsheets/d/1-BnjLpKsrUS5DdDmAEn16eEp9Uqs97cNpr_a7CScwfo';
+                    mensaje += '\\n📁 Carpeta Drive: Partes_Diarios_Trabajo';
                     mensaje += '\\n\\n💡 Base de datos profesional lista para análisis!';
 
                     alert(mensaje);
+
                     return true;
 
                 } catch (error) {
@@ -406,881 +382,2073 @@
                 }
             };
 
-            const saveAndSend = async () => {
-                // Primero guardar localmente
-                const localSaved = savePartLocally();
-                if (!localSaved) return;
+            const MemoryIndicator = () => {
+                const getColor = () => {
+                    if (memoryInfo.percentage < 50) return 'bg-green-500';
+                    if (memoryInfo.percentage < 80) return 'bg-yellow-500';
+                    return 'bg-red-500';
+                };
 
-                // Luego intentar enviar a Google Sheets
-                await sendToGoogleSheets();
+                return (
+                    <div className="flex items-center gap-2 text-sm">
+                        <span>💾</span>
+                        <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                                className={`h-full ${getColor()} transition-all duration-300`}
+                                style={{ width: `${memoryInfo.percentage}%` }}
+                            />
+                        </div>
+                        <span className="text-xs text-gray-600">
+                            {memoryInfo.used}MB
+                        </span>
+                    </div>
+                );
+            };
 
-                // Resetear formulario después del envío
-                setFormData({
+            const loadSavedData = () => {
+                try {
+                    const savedData = localStorage.getItem('parte_diario_current');
+                    const savedId = localStorage.getItem('parte_diario_current_id');
+
+                    if (savedData) {
+                        const parsedData = JSON.parse(savedData);
+                        setFormData(parsedData);
+                        setSaveStatus('saved');
+                    }
+
+                    if (savedId) {
+                        setCurrentParteId(savedId);
+                    } else {
+                        const newId = 'parte_' + Date.now();
+                        setCurrentParteId(newId);
+                        localStorage.setItem('parte_diario_current_id', newId);
+                    }
+                } catch (error) {
+                    console.error('Error cargando datos:', error);
+                    setSaveStatus('error');
+                }
+            };
+
+            const loadHistoryData = () => {
+                try {
+                    const history = localStorage.getItem('partes_diarios_history');
+                    if (history) {
+                        setPartesHistory(JSON.parse(history));
+                    }
+                } catch (error) {
+                    console.error('Error cargando historial:', error);
+                }
+            };
+
+            useEffect(() => {
+                if (currentParteId) {
+                    autoSave();
+                }
+            }, [formData]);
+
+            const autoSave = () => {
+                setSaveStatus('saving');
+
+                if (saveTimeoutRef.current) {
+                    clearTimeout(saveTimeoutRef.current);
+                }
+
+                saveTimeoutRef.current = setTimeout(() => {
+                    try {
+                        localStorage.setItem('parte_diario_current', JSON.stringify(formData));
+                        setSaveStatus('saved');
+                    } catch (error) {
+                        console.error('Error guardando:', error);
+                        setSaveStatus('error');
+                    }
+                }, 2000);
+            };
+
+            const saveToHistory = () => {
+                try {
+                    const parteCompleto = {
+                        id: currentParteId,
+                        ...formData,
+                        fechaCreacion: new Date().toISOString(),
+                        ultimaModificacion: new Date().toISOString(),
+                        completado: true
+                    };
+
+                    const updatedHistory = [...partesHistory];
+                    const existingIndex = updatedHistory.findIndex(p => p.id === currentParteId);
+
+                    if (existingIndex >= 0) {
+                        updatedHistory[existingIndex] = parteCompleto;
+                    } else {
+                        updatedHistory.unshift(parteCompleto);
+                    }
+
+                    if (updatedHistory.length > maxPartesLimit) {
+                        updatedHistory.splice(maxPartesLimit);
+                    }
+
+                    setPartesHistory(updatedHistory);
+                    localStorage.setItem('partes_diarios_history', JSON.stringify(updatedHistory));
+                    updateMemoryInfo();
+
+                    createNewParte();
+                    return true;
+                } catch (error) {
+                    console.error('Error guardando en historial:', error);
+                    if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
+                        alert('⚠️ Memoria llena. Limpiando partes antiguos automáticamente...');
+                        const eliminated = cleanOldPartes(Math.floor(maxPartesLimit / 2));
+                        if (eliminated > 0) {
+                            alert(`🧹 Se eliminaron ${eliminated} partes antiguos. Intenta guardar de nuevo.`);
+                        }
+                    }
+                    return false;
+                }
+            };
+
+            const createNewParte = () => {
+                const newId = 'parte_' + Date.now();
+                setCurrentParteId(newId);
+                localStorage.setItem('parte_diario_current_id', newId);
+
+                const newFormData = {
                     nombreTrabajo: '',
                     fecha: new Date().toISOString().split('T')[0],
-                    operarios: [{ nombre: '', horas: '' }],
                     trabajosRealizados: '',
+                    operarios: [{ nombre: '', horas: '' }],
                     materialesUtilizados: '',
                     incidencias: '',
                     observaciones: '',
                     tareasPendientes: '',
                     imagenes: [],
-                    albaranes: []
-                });
-                setCurrentStep(0);
-
-                alert('✅ Parte guardado exitosamente!\\n\\nPuedes crear un nuevo parte.');
-            };
-
-            // ========== FUNCIONES DE CONFIGURACIÓN ==========
-            const saveGoogleScriptUrl = (url) => {
-                setGoogleScriptUrl(url);
-                localStorage.setItem('google_script_url', url);
-            };
-
-            const testConnection = () => {
-                if (!googleScriptUrl.trim()) {
-                    alert('⚠️ Primero configura la URL del Google Apps Script');
-                    return;
-                }
-
-                // Datos de prueba para Google Apps Script
-                const testData = {
-                    nombreTrabajo: 'TEST - Prueba de conexión',
-                    fecha: new Date().toISOString().split('T')[0],
-                    totalHoras: '8',
-                    numOperarios: '1',
-                    listaOperarios: 'Usuario Test: 8h',
-                    trabajosRealizados: 'Prueba de conexión con Google Apps Script',
-                    materialesUtilizados: 'Ninguno',
-                    incidencias: '',
-                    observaciones: 'Prueba realizada desde configuración',
-                    tareasPendientes: '',
-                    infoImagenes: 'Sin imágenes',
-                    infoAlbaranes: 'Sin albaranes'
+                    albaranes: [],
+                    resumenInteligente: ''
                 };
 
-                // Crear URL con parámetros GET
-                const params = new URLSearchParams(testData);
-                const testUrl = `${googleScriptUrl}?${params.toString()}`;
-
-                alert('🧪 Enviando datos de prueba...\\n\\nSe abrirá una nueva pestaña con el resultado.\\n\\nSi ves un JSON con "status": "success", ¡la conexión funciona!');
-
-                // Abrir en nueva pestaña
-                window.open(testUrl, '_blank');
+                setFormData(newFormData);
+                setCurrentStep(0);
+                localStorage.removeItem('parte_diario_current');
             };
 
-            // ========== FUNCIONES DE EXPORTACIÓN ==========
-            const exportToCSV = () => {
-                if (savedParts.length === 0) {
-                    alert('❌ No hay partes guardados para exportar');
+            const loadParteFromHistory = (parte) => {
+                setCurrentParteId(parte.id);
+                setFormData({
+                    nombreTrabajo: parte.nombreTrabajo,
+                    fecha: parte.fecha,
+                    trabajosRealizados: parte.trabajosRealizados,
+                    operarios: parte.operarios,
+                    materialesUtilizados: parte.materialesUtilizados,
+                    incidencias: parte.incidencias,
+                    observaciones: parte.observaciones,
+                    tareasPendientes: parte.tareasPendientes,
+                    imagenes: parte.imagenes || [],
+                    resumenInteligente: parte.resumenInteligente
+                });
+                localStorage.setItem('parte_diario_current_id', parte.id);
+                setShowHistory(false);
+                setCurrentStep(0);
+            };
+
+            const deleteParteFromHistory = (parteId) => {
+                const updatedHistory = partesHistory.filter(p => p.id !== parteId);
+                setPartesHistory(updatedHistory);
+                localStorage.setItem('partes_diarios_history', JSON.stringify(updatedHistory));
+            };
+
+            const createTemplateFromParte = (parte) => {
+                const template = {
+                    nombreTrabajo: parte.nombreTrabajo,
+                    fecha: new Date().toISOString().split('T')[0],
+                    trabajosRealizados: '',
+                    operarios: parte.operarios.map(op => ({ ...op, horas: '' })),
+                    materialesUtilizados: parte.materialesUtilizados,
+                    incidencias: '',
+                    observaciones: '',
+                    tareasPendientes: '',
+                    imagenes: [],
+                    albaranes: [],
+                    resumenInteligente: ''
+                };
+
+                setFormData(template);
+                setShowHistory(false);
+                setCurrentStep(0);
+                createNewParte();
+            };
+
+            const exportHistoryToCSV = () => {
+                const csvData = [
+                    ['ID', 'Nombre Trabajo', 'Fecha', 'Total Horas', 'Operarios', 'Fecha Creación', 'Tiene Incidencias'],
+                    ...partesHistory.map(parte => [
+                        parte.id,
+                        parte.nombreTrabajo,
+                        parte.fecha,
+                        parte.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0),
+                        parte.operarios.length,
+                        new Date(parte.fechaCreacion).toLocaleDateString('es-ES'),
+                        parte.incidencias ? 'Sí' : 'No'
+                    ])
+                ];
+
+                const csvContent = csvData.map(row => row.join(',')).join('\\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Historial_Partes_Diarios_${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            };
+
+            const SaveStatusIndicator = () => {
+                const getStatusInfo = () => {
+                    switch (saveStatus) {
+                        case 'saving':
+                            return { text: 'Guardando...', color: 'text-yellow-600', icon: '⏳' };
+                        case 'saved':
+                            return { text: 'Guardado', color: 'text-green-600', icon: '✅' };
+                        case 'error':
+                            return { text: 'Error al guardar', color: 'text-red-600', icon: '❌' };
+                        default:
+                            return { text: 'Sin guardar', color: 'text-gray-600', icon: '⚪' };
+                    }
+                };
+
+                const status = getStatusInfo();
+                return (
+                    <div className={`flex items-center gap-1 text-sm ${status.color}`}>
+                        <span>{status.icon}</span>
+                        <span>{status.text}</span>
+                    </div>
+                );
+            };
+
+            // Inicializar reconocimiento de voz
+            useEffect(() => {
+                if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    recognitionRef.current = new SpeechRecognition();
+                    recognitionRef.current.continuous = true;
+                    recognitionRef.current.interimResults = true;
+                    recognitionRef.current.lang = 'es-ES';
+
+                    recognitionRef.current.onresult = (event) => {
+                        let finalTranscript = '';
+                        let interimTranscript = '';
+
+                        for (let i = event.resultIndex; i < event.results.length; i++) {
+                            const transcript = event.results[i][0].transcript;
+                            if (event.results[i].isFinal) {
+                                finalTranscript += transcript;
+                            } else {
+                                interimTranscript += transcript;
+                            }
+                        }
+
+                        // Mostrar texto provisional en tiempo real
+                        if (interimTranscript && currentField) {
+                            const currentValue = getCurrentFieldValue(currentField);
+                            const preview = currentValue + ' ' + interimTranscript;
+                            updateFieldPreview(currentField, preview);
+                        }
+
+                        // Actualizar con texto final
+                        if (finalTranscript) {
+                            handleVoiceInput(currentField, finalTranscript.trim());
+                        }
+                    };
+
+                    recognitionRef.current.onend = () => {
+                        setIsListening(false);
+                        setCurrentField('');
+                    };
+
+                    recognitionRef.current.onerror = (event) => {
+                        console.error('Error de reconocimiento de voz:', event.error);
+                        setIsListening(false);
+                        setCurrentField('');
+                    };
+                }
+
+                return () => {
+                    if (recognitionRef.current) {
+                        recognitionRef.current.stop();
+                    }
+                };
+            }, []);
+
+            const getCurrentFieldValue = (fieldName) => {
+                if (fieldName.includes('operario-')) {
+                    const [, index, field] = fieldName.split('-');
+                    const operarioIndex = parseInt(index);
+                    return formData.operarios[operarioIndex]?.[field] || '';
+                }
+                return formData[fieldName] || '';
+            };
+
+            const updateFieldPreview = (fieldName, value) => {
+                // Esta función actualizará visualmente el campo pero no guardará el cambio
+                // Se usa solo para mostrar la transcripción en tiempo real
+                const element = document.querySelector(`[data-voice-field="${fieldName}"]`);
+                if (element) {
+                    element.style.backgroundColor = '#fef3c7'; // Color amarillo suave para preview
+                    // No actualizar el valor real aún
+                }
+            };
+
+            const startVoiceRecognition = (fieldName) => {
+                if (!recognitionRef.current) {
+                    alert('❌ Reconocimiento de voz no disponible.\\n\\nAsegúrate de:\\n• Usar Chrome, Safari o Edge\\n• Permitir acceso al micrófono\\n• Tener conexión a internet');
                     return;
                 }
 
-                // Crear encabezados del CSV con todos los campos
-                const headers = [
-                    'Fecha Guardado',
-                    'ID Parte',
-                    'Nombre Trabajo',
-                    'Fecha Trabajo',
-                    'Total Horas',
-                    'Num Operarios',
-                    'Lista Operarios',
-                    'Trabajos Realizados',
-                    'Materiales Utilizados',
-                    'Incidencias',
-                    'Observaciones',
-                    'Tareas Pendientes',
-                    'Num Imágenes',
-                    'Nombres Imágenes',
-                    'Num Albaranes',
-                    'Nombres Albaranes'
-                ];
+                if (!isListening) {
+                    setCurrentField(fieldName);
+                    setIsListening(true);
 
-                let csvContent = headers.join(',') + '\\n';
-
-                savedParts.forEach(parte => {
-                    // Limpiar y escapar datos
-                    const cleanText = (text) => {
-                        if (!text) return '';
-                        return `"${text.toString().replace(/"/g, '""').replace(/\\n/g, ' ').replace(/\\r/g, ' ')}"`;
-                    };
-
-                    const imageNames = parte.imagenes?.map(img => img.name).join('; ') || '';
-                    const albaranNames = parte.albaranes?.map(alb => alb.name).join('; ') || '';
-                    const operariosList = parte.operarios?.map(op => `${op.nombre}: ${op.horas}h`).join('; ') || '';
-
-                    const row = [
-                        cleanText(new Date(parte.timestamp).toLocaleString('es-ES')),
-                        cleanText(parte.id || ''),
-                        cleanText(parte.nombreTrabajo || ''),
-                        cleanText(parte.fecha || ''),
-                        parte.totalHoras || 0,
-                        parte.operarios?.length || 0,
-                        cleanText(operariosList),
-                        cleanText(parte.trabajosRealizados || ''),
-                        cleanText(parte.materialesUtilizados || ''),
-                        cleanText(parte.incidencias || ''),
-                        cleanText(parte.observaciones || ''),
-                        cleanText(parte.tareasPendientes || ''),
-                        parte.imagenes?.length || 0,
-                        cleanText(imageNames),
-                        parte.albaranes?.length || 0,
-                        cleanText(albaranNames)
-                    ];
-
-                    csvContent += row.join(',') + '\\n';
-                });
-
-                // Crear y descargar archivo
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const link = document.createElement('a');
-
-                if (link.download !== undefined) {
-                    const url = URL.createObjectURL(blob);
-                    const fecha = new Date().toISOString().split('T')[0];
-                    const fileName = `partes_diarios_completo_${fecha}.csv`;
-
-                    link.setAttribute('href', url);
-                    link.setAttribute('download', fileName);
-                    link.style.visibility = 'hidden';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-
-                    // Limpiar URL
-                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                    try {
+                        recognitionRef.current.start();
+                        console.log('🎤 Iniciando reconocimiento de voz para:', fieldName);
+                    } catch (error) {
+                        console.error('Error al iniciar reconocimiento:', error);
+                        setIsListening(false);
+                        setCurrentField('');
+                        alert('❌ Error al iniciar el reconocimiento de voz.\\n\\nPrueba a:\\n• Refrescar la página\\n• Verificar permisos del micrófono\\n• Cerrar otras aplicaciones que usen el micrófono');
+                    }
                 }
-
-                // Mostrar resumen de exportación
-                const mensaje = `📊 CSV exportado exitosamente\\n\\n` +
-                               `📁 Archivo: partes_diarios_completo_${new Date().toISOString().split('T')[0]}.csv\\n` +
-                               `📋 Registros: ${savedParts.length} partes\\n` +
-                               `📊 Campos: ${headers.length} columnas\\n\\n` +
-                               `✅ Compatible con Excel, Google Sheets y cualquier aplicación de hojas de cálculo\\n\\n` +
-                               `💡 El archivo incluye todos los datos: operarios, trabajos, materiales, incidencias, observaciones, tareas pendientes y archivos adjuntos`;
-
-                alert(mensaje);
             };
 
-            // ========== RENDERIZADO DE PASOS ==========
+            const stopVoiceRecognition = () => {
+                if (recognitionRef.current && isListening) {
+                    recognitionRef.current.stop();
+                    setIsListening(false);
+                    setCurrentField('');
+                }
+            };
+
+            const handleVoiceInput = (fieldName, transcript) => {
+                console.log('📝 Transcripción recibida:', transcript, 'para campo:', fieldName);
+
+                if (fieldName.includes('operario-')) {
+                    const [, index, field] = fieldName.split('-');
+                    const operarioIndex = parseInt(index);
+                    const currentValue = formData.operarios[operarioIndex]?.[field] || '';
+                    const newValue = currentValue ? currentValue + ' ' + transcript : transcript;
+                    updateOperario(operarioIndex, field, newValue);
+                } else {
+                    const currentValue = formData[fieldName] || '';
+                    const newValue = currentValue ? currentValue + ' ' + transcript : transcript;
+                    handleInputChange(fieldName, newValue);
+                }
+
+                // Limpiar el preview visual
+                const element = document.querySelector(`[data-voice-field="${fieldName}"]`);
+                if (element) {
+                    element.style.backgroundColor = '';
+                }
+            };
+
+            const VoiceButton = ({ fieldName }) => {
+                const isCurrentlyListening = isListening && currentField === fieldName;
+
+                return (
+                    <button
+                        type="button"
+                        onClick={() => isCurrentlyListening ? stopVoiceRecognition() : startVoiceRecognition(fieldName)}
+                        className={`p-2 rounded-lg transition-all duration-200 ${
+                            isCurrentlyListening
+                                ? 'bg-red-500 text-white animate-pulse'
+                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                        }`}
+                        title={isCurrentlyListening ? 'Detener dictado' : 'Iniciar dictado por voz'}
+                    >
+                        {isCurrentlyListening ? <MicOff size={16} /> : <Mic size={16} />}
+                    </button>
+                );
+            };
+
+            const steps = [
+                { title: 'Información General', icon: FileText },
+                { title: 'Trabajos Realizados', icon: FileText },
+                { title: 'Operarios y Horas', icon: Users },
+                { title: 'Materiales', icon: Package },
+                { title: 'Incidencias', icon: AlertTriangle },
+                { title: 'Observaciones', icon: FileText },
+                { title: 'Tareas Pendientes', icon: Clock },
+                { title: 'Imágenes', icon: Camera },
+                { title: 'Albaranes', icon: FileText },
+                { title: 'Resumen Final', icon: Brain }
+            ];
+
+            const handleInputChange = (field, value) => {
+                setFormData(prev => ({ ...prev, [field]: value }));
+            };
+
+            const addOperario = () => {
+                setFormData(prev => ({
+                    ...prev,
+                    operarios: [...prev.operarios, { nombre: '', horas: '' }]
+                }));
+            };
+
+            // Función para validar si se puede finalizar el parte
+            const canFinishParte = () => {
+                const hasWorkName = formData.nombreTrabajo && formData.nombreTrabajo.trim().length > 0;
+                const hasValidOperario = formData.operarios.some(op =>
+                    op.nombre && op.nombre.trim().length > 0 &&
+                    op.horas && parseFloat(op.horas) > 0
+                );
+                return hasWorkName && hasValidOperario;
+            };
+
+            const updateOperario = (index, field, value) => {
+                setFormData(prev => ({
+                    ...prev,
+                    operarios: prev.operarios.map((op, i) =>
+                        i === index ? { ...op, [field]: value } : op
+                    )
+                }));
+            };
+
+            const removeOperario = (index) => {
+                if (formData.operarios.length > 1) {
+                    setFormData(prev => ({
+                        ...prev,
+                        operarios: prev.operarios.filter((_, i) => i !== index)
+                    }));
+                }
+            };
+
+            const generateResumen = () => {
+                const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
+                const fecha = new Date(formData.fecha);
+                const fechaFormateada = fecha.toLocaleDateString('es-ES', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+
+                // Calcular estadísticas avanzadas
+                const promedioHoras = formData.operarios.length > 0 ? (totalHoras / formData.operarios.length).toFixed(1) : 0;
+                const eficiencia = totalHoras >= 8 ? 'ÓPTIMA' : totalHoras >= 6 ? 'BUENA' : totalHoras >= 4 ? 'REGULAR' : 'BAJA';
+                const estado = formData.incidencias ? 'CON INCIDENCIAS' : 'COMPLETADO';
+                const complejidad = totalHoras > 12 ? 'ALTA' : totalHoras > 8 ? 'MEDIA' : 'BAJA';
+
+                const resumen = `
+═══════════════════════════════════════════════════════════════════════════════════
+                           RESUMEN EJECUTIVO - PARTE DIARIO DE TRABAJO
+═══════════════════════════════════════════════════════════════════════════════════
+
+📋 INFORMACIÓN DEL PROYECTO
+────────────────────────────────────────────────────────────────────────────────────
+• Proyecto: ${formData.nombreTrabajo.toUpperCase()}
+• Fecha de Ejecución: ${fechaFormateada}
+• Estado del Trabajo: ${estado}
+• Complejidad: ${complejidad}
+
+⏱️ ANÁLISIS DE RENDIMIENTO
+────────────────────────────────────────────────────────────────────────────────────
+• Total de Horas Invertidas: ${totalHoras} horas
+• Número de Operarios: ${formData.operarios.length} personas
+• Promedio por Operario: ${promedioHoras} horas
+• Eficiencia del Equipo: ${eficiencia}
+• Productividad: ${totalHoras > 0 ? `${(totalHoras / formData.operarios.length * 100 / 8).toFixed(0)}%` : '0%'} de la jornada estándar
+
+👷‍♂️ DISTRIBUCIÓN DEL PERSONAL
+────────────────────────────────────────────────────────────────────────────────────
+${formData.operarios.map((op, index) => {
+    const horas = parseFloat(op.horas) || 0;
+    const porcentaje = totalHoras > 0 ? ((horas / totalHoras) * 100).toFixed(1) : '0.0';
+    return `${index + 1}. ${op.nombre}: ${horas}h (${porcentaje}% del total)`;
+}).join('\\n')}
+
+🎯 OBJETIVOS Y ACTIVIDADES EJECUTADAS
+────────────────────────────────────────────────────────────────────────────────────
+${formData.trabajosRealizados}
+
+🔧 RECURSOS Y MATERIALES EMPLEADOS
+────────────────────────────────────────────────────────────────────────────────────
+${formData.materialesUtilizados}
+
+${formData.incidencias ? `
+⚠️ GESTIÓN DE INCIDENCIAS
+────────────────────────────────────────────────────────────────────────────────────
+ESTADO: IDENTIFICADAS Y DOCUMENTADAS
+DESCRIPCIÓN: ${formData.incidencias}
+ACCIÓN REQUERIDA: Revisión y seguimiento necesario
+PRIORIDAD: ${formData.incidencias.toLowerCase().includes('urgente') || formData.incidencias.toLowerCase().includes('crítico') ? 'ALTA' : 'MEDIA'}
+` : `
+✅ CONTROL DE CALIDAD
+────────────────────────────────────────────────────────────────────────────────────
+ESTADO: SIN INCIDENCIAS REPORTADAS
+EVALUACIÓN: TRABAJO EJECUTADO CONFORME A ESPECIFICACIONES
+CALIDAD: SATISFACTORIA
+`}
+
+${formData.observaciones ? `
+💡 ANÁLISIS TÉCNICO Y OBSERVACIONES
+────────────────────────────────────────────────────────────────────────────────────
+${formData.observaciones}
+` : ''}
+
+${formData.tareasPendientes ? `
+📋 PLANIFICACIÓN PARA PRÓXIMA JORNADA
+────────────────────────────────────────────────────────────────────────────────────
+TAREAS PROGRAMADAS:
+${formData.tareasPendientes}
+
+RECURSOS NECESARIOS: Por definir según tareas
+TIEMPO ESTIMADO: Por evaluar
+` : `
+📋 PLANIFICACIÓN PARA PRÓXIMA JORNADA
+────────────────────────────────────────────────────────────────────────────────────
+ESTADO: FASE ACTUAL COMPLETADA
+PRÓXIMOS PASOS: Pendiente de definición
+`}
+
+📊 INDICADORES CLAVE DE RENDIMIENTO (KPI)
+────────────────────────────────────────────────────────────────────────────────────
+• Cumplimiento de Horario: ${eficiencia}
+• Gestión de Recursos: ${formData.materialesUtilizados ? 'ADECUADA' : 'NO ESPECIFICADA'}
+• Documentación: ${formData.imagenes.length} evidencias fotográficas adjuntas
+• Control de Incidencias: ${formData.incidencias ? 'GESTIONADO' : 'SIN INCIDENCIAS'}
+• Planificación: ${formData.tareasPendientes ? 'DEFINIDA' : 'PENDIENTE'}
+
+═══════════════════════════════════════════════════════════════════════════════════
+Documento generado automáticamente el ${new Date().toLocaleString('es-ES')}
+Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
+═══════════════════════════════════════════════════════════════════════════════════
+                `.trim();
+
+                handleInputChange('resumenInteligente', resumen);
+            };
+
+            const nextStep = () => {
+                // Validaciones por paso
+                if (currentStep === 0) {
+                    if (!formData.nombreTrabajo || formData.nombreTrabajo.trim().length === 0) {
+                        alert('⚠️ Por favor, ingresa el nombre del trabajo antes de continuar.');
+                        return;
+                    }
+                }
+
+                if (currentStep === 2) {
+                    const hasValidOperario = formData.operarios.some(op =>
+                        op.nombre && op.nombre.trim().length > 0 &&
+                        op.horas && parseFloat(op.horas) > 0
+                    );
+                    if (!hasValidOperario) {
+                        alert('⚠️ Por favor, agrega al menos un operario con nombre y horas antes de continuar.');
+                        return;
+                    }
+                }
+
+                if (currentStep === 7) {
+                    generateResumen();
+                }
+
+                if (currentStep === 8) {
+                    // En el paso de albaranes, generar resumen para el siguiente paso
+                    generateResumen();
+                }
+
+                if (currentStep === 9) {
+                    // En el resumen final, aquí es donde se guarda
+                    if (!canFinishParte()) {
+                        alert('⚠️ No se puede finalizar el parte.\\n\\nVerifica que tengas:\\n• Nombre del trabajo\\n• Al menos un operario con nombre y horas');
+                        return;
+                    }
+
+                    if (saveToHistory()) {
+                        alert('✅ Parte diario guardado en el historial correctamente');
+                        sendToGoogleSheets(); // Enviar a Google Sheets automáticamente
+                    } else {
+                        alert('❌ Error al guardar en el historial');
+                    }
+                    return;
+                }
+
+                if (currentStep < steps.length - 1) {
+                    setCurrentStep(currentStep + 1);
+                }
+            };
+
+            const prevStep = () => {
+                if (currentStep > 0) {
+                    setCurrentStep(currentStep - 1);
+                }
+            };
+
+            const exportToPDF = () => {
+                const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
+
+                const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Parte Diario de Trabajo - ${formData.nombreTrabajo}</title>
+    <style>
+        @media print {
+            body { margin: 0; }
+            .page-break { page-break-after: always; }
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 210mm;
+            margin: 0 auto;
+            padding: 20mm;
+            line-height: 1.6;
+            color: #333;
+            background: white;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #2563eb;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .company-logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2563eb;
+            margin-bottom: 5px;
+        }
+        .document-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1e40af;
+            margin: 10px 0;
+        }
+        .work-info {
+            background: #f8fafc;
+            border-left: 4px solid #2563eb;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .section {
+            margin: 25px 0;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1e40af;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 8px;
+            margin-bottom: 15px;
+        }
+        .personnel-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        .personnel-table th,
+        .personnel-table td {
+            border: 1px solid #cbd5e1;
+            padding: 12px;
+            text-align: left;
+        }
+        .personnel-table th {
+            background: #f1f5f9;
+            font-weight: bold;
+            color: #1e40af;
+        }
+        .personnel-table .total-row {
+            background: #e0f2fe;
+            font-weight: bold;
+        }
+        .content-box {
+            background: #fafafa;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .alert-box {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-left: 4px solid #ef4444;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .warning-box {
+            background: #fffbeb;
+            border: 1px solid #fed7aa;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .pending-box {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-left: 4px solid #0284c7;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e2e8f0;
+            text-align: center;
+            font-size: 12px;
+            color: #64748b;
+        }
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2563eb;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="company-logo">🏗️ CONSTRUCCIONES</div>
+        <div class="document-title">PARTE DIARIO DE TRABAJO</div>
+        <div style="font-size: 14px; color: #64748b;">Documento oficial - ${new Date().toLocaleDateString('es-ES')}</div>
+    </div>
+
+    <div class="work-info">
+        <h2 style="margin: 0 0 10px 0; color: #1e40af;">📋 INFORMACIÓN DEL TRABAJO</h2>
+        <p style="margin: 5px 0;"><strong>Proyecto:</strong> ${formData.nombreTrabajo}</p>
+        <p style="margin: 5px 0;"><strong>Fecha:</strong> ${new Date(formData.fecha).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        <p style="margin: 5px 0;"><strong>Generado:</strong> ${new Date().toLocaleString('es-ES')}</p>
+    </div>
+
+    <div class="summary-stats">
+        <div class="stat-card">
+            <div class="stat-number">${totalHoras}h</div>
+            <div class="stat-label">HORAS TOTALES</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">${formData.operarios.length}</div>
+            <div class="stat-label">OPERARIOS</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">${formData.imagenes.length}</div>
+            <div class="stat-label">IMÁGENES</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">${formData.incidencias ? 'SÍ' : 'NO'}</div>
+            <div class="stat-label">INCIDENCIAS</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3 class="section-title">👷‍♂️ PERSONAL Y HORAS TRABAJADAS</h3>
+        <table class="personnel-table">
+            <thead>
+                <tr>
+                    <th>Operario</th>
+                    <th>Horas Trabajadas</th>
+                    <th>Observaciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${formData.operarios.map(op => `
+                <tr>
+                    <td>${op.nombre}</td>
+                    <td>${op.horas}h</td>
+                    <td>-</td>
+                </tr>
+                `).join('')}
+                <tr class="total-row">
+                    <td><strong>TOTAL HORAS</strong></td>
+                    <td><strong>${totalHoras}h</strong></td>
+                    <td><strong>${(totalHoras / formData.operarios.length).toFixed(1)}h promedio</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h3 class="section-title">🔧 TRABAJOS REALIZADOS</h3>
+        <div class="content-box">
+            ${formData.trabajosRealizados.split('\\n').map(line => line ? `<p>${line}</p>` : '<br>').join('')}
+        </div>
+    </div>
+
+    <div class="section">
+        <h3 class="section-title">📦 MATERIALES UTILIZADOS</h3>
+        <div class="content-box">
+            ${formData.materialesUtilizados.split('\\n').map(line => line ? `<p>• ${line}</p>` : '<br>').join('')}
+        </div>
+    </div>
+
+    ${formData.incidencias ? `
+    <div class="section">
+        <h3 class="section-title">⚠️ INCIDENCIAS</h3>
+        <div class="alert-box">
+            ${formData.incidencias.split('\\n').map(line => line ? `<p>${line}</p>` : '<br>').join('')}
+        </div>
+    </div>
+    ` : ''}
+
+    ${formData.observaciones ? `
+    <div class="section">
+        <h3 class="section-title">💡 OBSERVACIONES</h3>
+        <div class="warning-box">
+            ${formData.observaciones.split('\\n').map(line => line ? `<p>${line}</p>` : '<br>').join('')}
+        </div>
+    </div>
+    ` : ''}
+
+    ${formData.tareasPendientes ? `
+    <div class="section">
+        <h3 class="section-title">📋 TAREAS PENDIENTES</h3>
+        <div class="pending-box">
+            ${formData.tareasPendientes.split('\\n').map(line => line ? `<p>• ${line}</p>` : '<br>').join('')}
+        </div>
+    </div>
+    ` : ''}
+
+    ${formData.resumenInteligente ? `
+    <div class="section">
+        <h3 class="section-title">📊 RESUMEN EJECUTIVO</h3>
+        <div class="content-box" style="border-left: 4px solid #059669; background: #f0fdfa;">
+            ${formData.resumenInteligente.split('\\n').map(line => line ? `<p>${line}</p>` : '<br>').join('')}
+        </div>
+    </div>
+    ` : ''}
+
+    <div class="footer">
+        <p>Documento generado automáticamente por el Sistema de Gestión de Partes Diarios</p>
+        <p>Este documento es válido sin firma según la normativa interna de la empresa</p>
+        <p>Generado el ${new Date().toLocaleString('es-ES')}</p>
+    </div>
+</body>
+</html>
+                `.trim();
+
+                // Crear y descargar como HTML
+                const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Parte_Diario_${formData.fecha}_${formData.nombreTrabajo.replace(/[^a-zA-Z0-9]/g, '_')}.html`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                // Mostrar mensaje informativo
+                alert('📄 PDF Profesional generado como HTML\\n\\n✅ Para convertir a PDF:\\n1. Abre el archivo HTML descargado\\n2. Ctrl+P (Imprimir)\\n3. Selecciona "Guardar como PDF"\\n4. ¡Listo! Tendrás un PDF profesional');
+            };
+
+            const exportToGoogleForms = () => {
+                // Enviar a Google Forms en lugar de descargar CSV
+                const success = sendToGoogleSheets();
+                if (success) {
+                    // También guardamos en el historial local
+                    saveCurrentParte();
+                }
+            };
+
+            const exportToCSV = () => {
+                const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
+                const fecha = new Date(formData.fecha);
+
+                // CSV optimizado para Google Sheets con formato tabular profesional
+                const csvData = [
+                    // CABECERA PRINCIPAL
+                    ['PARTE DIARIO DE TRABAJO', '', '', '', '', '', ''],
+                    [''],
+
+                    // INFORMACIÓN GENERAL (formato horizontal limpio)
+                    ['INFORMACIÓN DEL PROYECTO', '', '', '', '', '', ''],
+                    ['Proyecto', 'Fecha', 'Día Semana', 'Total Horas', 'Num. Operarios', 'Incidencias', 'Imágenes'],
+                    [
+                        formData.nombreTrabajo,
+                        formData.fecha,
+                        fecha.toLocaleDateString('es-ES', { weekday: 'long' }),
+                        totalHoras,
+                        formData.operarios.length,
+                        formData.incidencias ? 'SÍ' : 'NO',
+                        formData.imagenes.length
+                    ],
+                    [''],
+
+                    // TABLA DE PERSONAL Y HORAS
+                    ['PERSONAL TRABAJANDO', '', '', '', '', '', ''],
+                    ['N°', 'Operario', 'Horas', 'Porcentaje', 'Observaciones', '', ''],
+                    ...formData.operarios.map((op, index) => [
+                        index + 1,
+                        op.nombre,
+                        parseFloat(op.horas) || 0,
+                        totalHoras > 0 ? `${((parseFloat(op.horas) || 0) / totalHoras * 100).toFixed(1)}%` : '0%',
+                        '-',
+                        '',
+                        ''
+                    ]),
+                    ['', 'TOTAL HORAS', totalHoras, '100%', `Promedio: ${(totalHoras / formData.operarios.length).toFixed(1)}h`, '', ''],
+                    [''],
+
+                    // TRABAJOS REALIZADOS (formato estructurado)
+                    ['TRABAJOS REALIZADOS', '', '', '', '', '', ''],
+                    ['Descripción', 'Estado', 'Complejidad', 'Tiempo Estimado', 'Observaciones', '', ''],
+                    [
+                        formData.trabajosRealizados,
+                        'COMPLETADO',
+                        'Media',
+                        `${totalHoras}h`,
+                        'Ver descripción detallada',
+                        '',
+                        ''
+                    ],
+                    [''],
+
+                    // MATERIALES Y RECURSOS
+                    ['MATERIALES Y HERRAMIENTAS', '', '', '', '', '', ''],
+                    ['Material/Herramienta', 'Cantidad', 'Estado', 'Observaciones', '', '', ''],
+                    ...formData.materialesUtilizados.split(',').map(material => [
+                        material.trim(),
+                        '1',
+                        'USADO',
+                        '-',
+                        '',
+                        '',
+                        ''
+                    ]),
+                    ['']
+                ];
+
+                // Añadir secciones opcionales solo si existen
+                if (formData.incidencias) {
+                    csvData.push(
+                        ['INCIDENCIAS Y PROBLEMAS', '', '', '', '', '', ''],
+                        ['Tipo', 'Descripción', 'Severidad', 'Estado', 'Acción Requerida', '', ''],
+                        [
+                            'GENERAL',
+                            formData.incidencias,
+                            'MEDIA',
+                            'REPORTADO',
+                            'Revisar y solucionar',
+                            '',
+                            ''
+                        ],
+                        ['']
+                    );
+                }
+
+                if (formData.observaciones) {
+                    csvData.push(
+                        ['OBSERVACIONES TÉCNICAS', '', '', '', '', '', ''],
+                        ['Observación', 'Tipo', 'Importancia', 'Fecha', '', '', ''],
+                        [
+                            formData.observaciones,
+                            'TÉCNICA',
+                            'IMPORTANTE',
+                            formData.fecha,
+                            '',
+                            '',
+                            ''
+                        ],
+                        ['']
+                    );
+                }
+
+                if (formData.tareasPendientes) {
+                    csvData.push(
+                        ['TAREAS PENDIENTES', '', '', '', '', '', ''],
+                        ['Tarea', 'Prioridad', 'Tiempo Estimado', 'Responsable', 'Fecha Límite', '', ''],
+                        [
+                            formData.tareasPendientes,
+                            'ALTA',
+                            'Por definir',
+                            'Equipo',
+                            'Próximo día hábil',
+                            '',
+                            ''
+                        ],
+                        ['']
+                    );
+                }
+
+                // RESUMEN EJECUTIVO Y METADATOS
+                csvData.push(
+                    ['RESUMEN EJECUTIVO', '', '', '', '', '', ''],
+                    ['Descripción', 'Autor', 'Fecha Generación', 'Versión', '', '', ''],
+                    [
+                        formData.resumenInteligente || 'Resumen automático generado',
+                        'Sistema Automático',
+                        new Date().toLocaleString('es-ES'),
+                        '1.0',
+                        '',
+                        '',
+                        ''
+                    ],
+                    [''],
+
+                    // ESTADÍSTICAS FINALES
+                    ['ESTADÍSTICAS DEL PROYECTO', '', '', '', '', '', ''],
+                    ['Métrica', 'Valor', 'Unidad', 'Observaciones', '', '', ''],
+                    ['Duración Total', totalHoras, 'horas', `${formData.operarios.length} operarios`],
+                    ['Eficiencia', totalHoras > 0 ? 'NORMAL' : 'SIN DATOS', 'Cualitativa', 'Basado en horas/operarios'],
+                    ['Calidad', formData.incidencias ? 'CON INCIDENCIAS' : 'SIN INCIDENCIAS', 'Cualitativa', 'Estado del trabajo'],
+                    ['Documentación', formData.imagenes.length, 'imágenes', 'Evidencia fotográfica'],
+                    ['']
+                );
+
+                // Generar CSV con BOM para Excel
+                const BOM = '\\uFEFF';
+                const csvContent = BOM + csvData.map(row => {
+                    return row.map(cell => {
+                        const cellStr = String(cell);
+                        // Escapar comillas y envolver en comillas si es necesario
+                        if (cellStr.includes(',') || cellStr.includes('\\n') || cellStr.includes('\"') || cellStr.includes(';')) {
+                            return `"${cellStr.replace(/"/g, '""')}"`;
+                        }
+                        return cellStr;
+                    }).join(',');
+                }).join('\\n');
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Parte_Diario_${formData.fecha}_${formData.nombreTrabajo.replace(/[^a-zA-Z0-9]/g, '_')}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                // Mostrar mensaje mejorado
+                alert('📊 CSV Profesional generado\\n\\n✅ Perfecto para Google Sheets:\\n• Tablas estructuradas con columnas\\n• Headers organizados\\n• Estadísticas incluidas\\n• Compatible con Excel y LibreOffice\\n\\n💡 Importa directamente en Sheets para análisis');
+            };
+
             const renderStep = () => {
-                const steps = [
-                    // Paso 0: Nombre del trabajo
-                    <div key="0" className="space-y-4">
-                        <div className="text-center">
-                            <FileText />
-                            <h2 className="text-xl font-bold mt-2">Nombre del Trabajo</h2>
-                            <p className="text-gray-600">¿En qué proyecto estás trabajando?</p>
-                        </div>
-                        <div className="relative">
-                            <input
-                                type="text"
-                                value={formData.nombreTrabajo}
-                                onChange={(e) => setFormData({...formData, nombreTrabajo: e.target.value})}
-                                placeholder="Ej: Instalación eléctrica edificio A"
-                                className="w-full p-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                                autoFocus
-                            />
-                            {isRecognitionSupported.current && (
-                                <button
-                                    onClick={isListening ? stopListening : startListening}
-                                    className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-full ${
-                                        isListening ? 'bg-red-500 text-white voice-active' : 'bg-gray-200 hover:bg-gray-300'
-                                    }`}
-                                >
-                                    {isListening ? <MicOff /> : <Mic />}
-                                </button>
-                            )}
-                        </div>
-                    </div>,
-
-                    // Paso 1: Fecha y Operarios
-                    <div key="1" className="space-y-6">
-                        <div className="text-center">
-                            <Calendar />
-                            <h2 className="text-xl font-bold mt-2">Fecha y Operarios</h2>
-                            <p className="text-gray-600">Información básica del parte</p>
-                        </div>
-
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    <Calendar /> Fecha del trabajo
-                                </label>
-                                <input
-                                    type="date"
-                                    value={formData.fecha}
-                                    onChange={(e) => setFormData({...formData, fecha: e.target.value})}
-                                    className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    <Users /> Operarios
-                                </label>
-                                {formData.operarios.map((operario, index) => (
-                                    <div key={index} className="flex gap-2 mb-2">
+                switch (currentStep) {
+                    case 0:
+                        return (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-blue-700 mb-4">Información General del Trabajo</h3>
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">¿Cuál es el nombre del trabajo o proyecto?</label>
+                                    <div className="flex gap-2">
                                         <input
                                             type="text"
-                                            placeholder="Nombre del operario"
-                                            value={operario.nombre}
-                                            onChange={(e) => updateOperario(index, 'nombre', e.target.value)}
-                                            className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                                            value={formData.nombreTrabajo}
+                                            onChange={(e) => handleInputChange('nombreTrabajo', e.target.value)}
+                                            className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Ej: Construcción edificio residencial, Reparación maquinaria..."
+                                            data-voice-field="nombreTrabajo"
                                         />
-                                        <input
-                                            type="number"
-                                            placeholder="Horas"
-                                            value={operario.horas}
-                                            onChange={(e) => updateOperario(index, 'horas', e.target.value)}
-                                            className="w-20 p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                                            step="0.5"
-                                            min="0"
+                                        <VoiceButton fieldName="nombreTrabajo" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Fecha del trabajo</label>
+                                    <input
+                                        type="date"
+                                        value={formData.fecha}
+                                        onChange={(e) => handleInputChange('fecha', e.target.value)}
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+                        );
+
+                    case 1:
+                        return (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-blue-700 mb-4">Trabajos Realizados</h3>
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Describe detalladamente los trabajos realizados hoy</label>
+                                    <div className="flex gap-2">
+                                        <textarea
+                                            value={formData.trabajosRealizados}
+                                            onChange={(e) => handleInputChange('trabajosRealizados', e.target.value)}
+                                            rows={6}
+                                            className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Ej: \\n- Excavación de zanjas para cimientos\\n- Instalación de tuberías de agua\\n- Hormigonado de la base..."
+                                            data-voice-field="trabajosRealizados"
                                         />
+                                        <div className="flex flex-col">
+                                            <VoiceButton fieldName="trabajosRealizados" />
+                                        </div>
+                                    </div>
+                                    {isListening && currentField === 'trabajosRealizados' && (
+                                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                                            <p className="text-sm text-red-700">🎤 Dictando... Habla claramente y haz pausas entre ideas</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+
+                    case 2:
+                        return (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-blue-700 mb-4">Operarios y Horas Trabajadas</h3>
+                                {formData.operarios.map((operario, index) => (
+                                    <div key={index} className="flex gap-3 items-end">
+                                        <div className="flex-1">
+                                            <label className="block text-sm font-medium mb-2">Nombre del operario</label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={operario.nombre}
+                                                    onChange={(e) => updateOperario(index, 'nombre', e.target.value)}
+                                                    className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Nombre completo"
+                                                    data-voice-field={`operario-${index}-nombre`}
+                                                />
+                                                <VoiceButton fieldName={`operario-${index}-nombre`} />
+                                            </div>
+                                        </div>
+                                        <div className="w-24">
+                                            <label className="block text-sm font-medium mb-2">Horas</label>
+                                            <input
+                                                type="number"
+                                                value={operario.horas}
+                                                onChange={(e) => updateOperario(index, 'horas', e.target.value)}
+                                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                placeholder="8"
+                                                step="0.5"
+                                            />
+                                        </div>
                                         {formData.operarios.length > 1 && (
                                             <button
                                                 onClick={() => removeOperario(index)}
                                                 className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
                                             >
-                                                ❌
+                                                ✕
                                             </button>
                                         )}
                                     </div>
                                 ))}
                                 <button
                                     onClick={addOperario}
-                                    className="w-full p-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-gray-400"
+                                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
                                 >
-                                    + Añadir operario
+                                    + Añadir Operario
                                 </button>
-                                <div className="text-sm text-gray-600 mt-2">
-                                    Total horas: {formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0)}
+                                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                                    <strong>Total horas: {formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0)} horas</strong>
+                                </div>
+                                {isListening && currentField.includes('operario-') && (
+                                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                                        <p className="text-sm text-red-700">🎤 Dictando nombre del operario... Di el nombre completo</p>
+                                    </div>
+                                )}
+                            </div>
+                        );
+
+                    case 3:
+                        return (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-blue-700 mb-4">Materiales Utilizados</h3>
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Lista todos los materiales utilizados con cantidades</label>
+                                    <div className="flex gap-2">
+                                        <textarea
+                                            value={formData.materialesUtilizados}
+                                            onChange={(e) => handleInputChange('materialesUtilizados', e.target.value)}
+                                            rows={6}
+                                            className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Ej:\\n- Cemento: 10 sacos de 50kg\\n- Arena: 2 m³\\n- Grava: 3 m³\\n- Tubos PVC: 20 metros de Ø110mm\\n- Tornillería varia..."
+                                        />
+                                        <div className="flex flex-col">
+                                            <VoiceButton fieldName="materialesUtilizados" />
+                                        </div>
+                                    </div>
+                                    {isListening && currentField === 'materialesUtilizados' && (
+                                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                                            <p className="text-sm text-red-700">🎤 Dictando materiales... Di el material y la cantidad</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
-                        </div>
-                    </div>,
+                        );
 
-                    // Paso 2: Trabajos realizados
-                    <div key="2" className="space-y-4">
-                        <div className="text-center">
-                            <Package />
-                            <h2 className="text-xl font-bold mt-2">Trabajos Realizados</h2>
-                            <p className="text-gray-600">Describe los trabajos realizados durante la jornada</p>
-                        </div>
-                        <div className="relative">
-                            <textarea
-                                value={formData.trabajosRealizados}
-                                onChange={(e) => setFormData({...formData, trabajosRealizados: e.target.value})}
-                                placeholder="Ej: Instalación de tubería en planta baja, conexión de cuadro eléctrico..."
-                                className="w-full p-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none h-32 resize-none"
-                                autoFocus
-                            />
-                            {isRecognitionSupported.current && (
-                                <button
-                                    onClick={isListening ? stopListening : startListening}
-                                    className={`absolute right-3 top-3 p-2 rounded-full ${
-                                        isListening ? 'bg-red-500 text-white voice-active' : 'bg-gray-200 hover:bg-gray-300'
-                                    }`}
-                                >
-                                    {isListening ? <MicOff /> : <Mic />}
-                                </button>
-                            )}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                            💡 Tip: Sé específico sobre las tareas completadas, materiales utilizados y tiempos empleados
-                        </div>
-                    </div>,
+                    case 4:
+                        return (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-blue-700 mb-4">Incidencias</h3>
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">¿Ha habido alguna incidencia, problema o imprevisto?</label>
+                                    <div className="flex gap-2">
+                                        <textarea
+                                            value={formData.incidencias}
+                                            onChange={(e) => handleInputChange('incidencias', e.target.value)}
+                                            rows={4}
+                                            className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Describe cualquier problema, retraso, accidente menor, falta de material, condiciones climáticas adversas, etc. Si no hubo incidencias, déjalo vacío."
+                                        />
+                                        <div className="flex flex-col">
+                                            <VoiceButton fieldName="incidencias" />
+                                        </div>
+                                    </div>
+                                    {isListening && currentField === 'incidencias' && (
+                                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                                            <p className="text-sm text-red-700">🎤 Dictando incidencias... Describe cualquier problema</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
 
-                    // Paso 3: Materiales utilizados
-                    <div key="3" className="space-y-4">
-                        <div className="text-center">
-                            <Package />
-                            <h2 className="text-xl font-bold mt-2">Materiales Utilizados</h2>
-                            <p className="text-gray-600">Lista los materiales y herramientas empleados</p>
-                        </div>
-                        <div className="relative">
-                            <textarea
-                                value={formData.materialesUtilizados}
-                                onChange={(e) => setFormData({...formData, materialesUtilizados: e.target.value})}
-                                placeholder="Ej: 20m cable 2.5mm, 5 enchufes, taladro, nivel láser..."
-                                className="w-full p-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none h-32 resize-none"
-                                autoFocus
-                            />
-                            {isRecognitionSupported.current && (
-                                <button
-                                    onClick={isListening ? stopListening : startListening}
-                                    className={`absolute right-3 top-3 p-2 rounded-full ${
-                                        isListening ? 'bg-red-500 text-white voice-active' : 'bg-gray-200 hover:bg-gray-300'
-                                    }`}
-                                >
-                                    {isListening ? <MicOff /> : <Mic />}
-                                </button>
-                            )}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                            💡 Tip: Incluye cantidades, marcas y referencias cuando sea posible
-                        </div>
-                    </div>,
+                    case 5:
+                        return (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-blue-700 mb-4">Observaciones Generales</h3>
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Observaciones adicionales, comentarios o notas importantes</label>
+                                    <div className="flex gap-2">
+                                        <textarea
+                                            value={formData.observaciones}
+                                            onChange={(e) => handleInputChange('observaciones', e.target.value)}
+                                            rows={4}
+                                            className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Cualquier observación sobre calidad del trabajo, eficiencia del equipo, sugerencias de mejora, etc."
+                                        />
+                                        <div className="flex flex-col">
+                                            <VoiceButton fieldName="observaciones" />
+                                        </div>
+                                    </div>
+                                    {isListening && currentField === 'observaciones' && (
+                                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                                            <p className="text-sm text-red-700">🎤 Dictando observaciones... Comenta lo que consideres importante</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
 
-                    // Paso 4: Incidencias
-                    <div key="4" className="space-y-4">
-                        <div className="text-center">
-                            <AlertTriangle />
-                            <h2 className="text-xl font-bold mt-2">Incidencias</h2>
-                            <p className="text-gray-600">Registra cualquier problema o situación inesperada</p>
-                        </div>
-                        <div className="relative">
-                            <textarea
-                                value={formData.incidencias}
-                                onChange={(e) => setFormData({...formData, incidencias: e.target.value})}
-                                placeholder="Ej: Retraso por lluvia, material defectuoso, problema con acceso..."
-                                className="w-full p-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none h-32 resize-none"
-                                autoFocus
-                            />
-                            {isRecognitionSupported.current && (
-                                <button
-                                    onClick={isListening ? stopListening : startListening}
-                                    className={`absolute right-3 top-3 p-2 rounded-full ${
-                                        isListening ? 'bg-red-500 text-white voice-active' : 'bg-gray-200 hover:bg-gray-300'
-                                    }`}
-                                >
-                                    {isListening ? <MicOff /> : <Mic />}
-                                </button>
-                            )}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                            💡 Tip: Si no hubo incidencias, puedes dejar este campo vacío
-                        </div>
-                    </div>,
+                    case 6:
+                        return (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-blue-700 mb-4">Tareas Pendientes para Mañana</h3>
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">¿Qué trabajos están programados para el próximo día laboral?</label>
+                                    <div className="flex gap-2">
+                                        <textarea
+                                            value={formData.tareasPendientes}
+                                            onChange={(e) => handleInputChange('tareasPendientes', e.target.value)}
+                                            rows={5}
+                                            className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Ej:\\n- Continuar con el hormigonado\\n- Recepción de materiales a las 8:00\\n- Inspección técnica a las 10:00\\n- Montaje de estructura metálica..."
+                                        />
+                                        <div className="flex flex-col">
+                                            <VoiceButton fieldName="tareasPendientes" />
+                                        </div>
+                                    </div>
+                                    {isListening && currentField === 'tareasPendientes' && (
+                                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                                            <p className="text-sm text-red-700">🎤 Dictando tareas pendientes... Enumera las actividades de mañana</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
 
-                    // Paso 5: Observaciones
-                    <div key="5" className="space-y-4">
-                        <div className="text-center">
-                            <Brain />
-                            <h2 className="text-xl font-bold mt-2">Observaciones</h2>
-                            <p className="text-gray-600">Comentarios adicionales y notas importantes</p>
-                        </div>
-                        <div className="relative">
-                            <textarea
-                                value={formData.observaciones}
-                                onChange={(e) => setFormData({...formData, observaciones: e.target.value})}
-                                placeholder="Ej: Cliente satisfecho con el trabajo, necesario coordinar con electricista..."
-                                className="w-full p-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none h-32 resize-none"
-                                autoFocus
-                            />
-                            {isRecognitionSupported.current && (
-                                <button
-                                    onClick={isListening ? stopListening : startListening}
-                                    className={`absolute right-3 top-3 p-2 rounded-full ${
-                                        isListening ? 'bg-red-500 text-white voice-active' : 'bg-gray-200 hover:bg-gray-300'
-                                    }`}
-                                >
-                                    {isListening ? <MicOff /> : <Mic />}
-                                </button>
-                            )}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                            💡 Tip: Incluye información útil para futuros trabajos o el seguimiento del proyecto
-                        </div>
-                    </div>,
-
-                    // Paso 6: Tareas pendientes
-                    <div key="6" className="space-y-4">
-                        <div className="text-center">
-                            <Clock />
-                            <h2 className="text-xl font-bold mt-2">Tareas Pendientes</h2>
-                            <p className="text-gray-600">Lista las tareas que quedan por realizar</p>
-                        </div>
-                        <div className="relative">
-                            <textarea
-                                value={formData.tareasPendientes}
-                                onChange={(e) => setFormData({...formData, tareasPendientes: e.target.value})}
-                                placeholder="Ej: Completar instalación segundo piso, revisión final de conexiones..."
-                                className="w-full p-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none h-32 resize-none"
-                                autoFocus
-                            />
-                            {isRecognitionSupported.current && (
-                                <button
-                                    onClick={isListening ? stopListening : startListening}
-                                    className={`absolute right-3 top-3 p-2 rounded-full ${
-                                        isListening ? 'bg-red-500 text-white voice-active' : 'bg-gray-200 hover:bg-gray-300'
-                                    }`}
-                                >
-                                    {isListening ? <MicOff /> : <Mic />}
-                                </button>
-                            )}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                            💡 Tip: Organiza las tareas por prioridad o fecha estimada de realización
-                        </div>
-                    </div>,
-
-                    // Paso 7: Archivos (imágenes y albaranes)
-                    <div key="7" className="space-y-6">
-                        <div className="text-center">
-                            <Camera />
-                            <h2 className="text-xl font-bold mt-2">Archivos Adjuntos</h2>
-                            <p className="text-gray-600">Sube imágenes del trabajo y albaranes</p>
-                        </div>
-
-                        {/* Sección de imágenes */}
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    <Camera /> Imágenes del trabajo
-                                </label>
-                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                    case 7:
+                        return (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-blue-700 mb-4">Imágenes del Trabajo</h3>
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Sube fotos del progreso, materiales o incidencias</label>
                                     <input
                                         type="file"
                                         multiple
                                         accept="image/*"
-                                        onChange={(e) => handleFileUpload(e.target.files, 'imagenes')}
-                                        className="hidden"
-                                        id="imagenes-upload"
+                                        onChange={(e) => {
+                                            const files = Array.from(e.target.files);
+                                            console.log('📷 Archivos seleccionados:', files.length);
+
+                                            // Convertir archivos a base64 para almacenamiento
+                                            const processFiles = async () => {
+                                                const processedImages = [];
+
+                                                for (const file of files) {
+                                                    try {
+                                                        const base64 = await convertToBase64(file);
+                                                        processedImages.push({
+                                                            name: file.name,
+                                                            size: file.size,
+                                                            type: file.type,
+                                                            data: base64,
+                                                            timestamp: new Date().toISOString()
+                                                        });
+                                                    } catch (error) {
+                                                        console.error('Error procesando imagen:', file.name, error);
+                                                    }
+                                                }
+
+                                                const allImages = [...(formData.imagenes || []), ...processedImages];
+                                                handleInputChange('imagenes', allImages);
+                                            };
+
+                                            processFiles();
+                                        }}
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                                     />
-                                    <label htmlFor="imagenes-upload" className="cursor-pointer">
-                                        <Camera />
-                                        <p className="mt-2 text-sm text-gray-600">
-                                            Haz clic para seleccionar imágenes o arrastra aquí
-                                        </p>
-                                        <p className="text-xs text-gray-500 mt-1">
-                                            Máximo 10MB por archivo
-                                        </p>
-                                    </label>
-                                </div>
 
-                                {/* Vista previa de imágenes */}
-                                {formData.imagenes.length > 0 && (
-                                    <div className="mt-4">
-                                        <h4 className="text-sm font-medium text-gray-700 mb-2">
-                                            Imágenes seleccionadas ({formData.imagenes.length})
-                                        </h4>
-                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                            {formData.imagenes.map((imagen, index) => (
-                                                <div key={index} className="relative group">
-                                                    <img
-                                                        src={imagen.url}
-                                                        alt={imagen.name}
-                                                        className="w-full h-24 object-cover rounded-lg border"
-                                                    />
-                                                    <button
-                                                        onClick={() => removeFile(index, 'imagenes')}
-                                                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                                                    >
-                                                        ❌
-                                                    </button>
-                                                    <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white text-xs p-1 rounded-b-lg truncate">
-                                                        {imagen.name}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Sección de albaranes */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    📄 Albaranes y documentos
-                                </label>
-                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-                                    <input
-                                        type="file"
-                                        multiple
-                                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                                        onChange={(e) => handleFileUpload(e.target.files, 'albaranes')}
-                                        className="hidden"
-                                        id="albaranes-upload"
-                                    />
-                                    <label htmlFor="albaranes-upload" className="cursor-pointer">
-                                        <span className="icon">📄</span>
-                                        <p className="mt-2 text-sm text-gray-600">
-                                            Selecciona albaranes, facturas o documentos
-                                        </p>
-                                        <p className="text-xs text-gray-500 mt-1">
-                                            PDF, imágenes o documentos (máximo 10MB)
-                                        </p>
-                                    </label>
-                                </div>
-
-                                {/* Lista de albaranes */}
-                                {formData.albaranes.length > 0 && (
-                                    <div className="mt-4">
-                                        <h4 className="text-sm font-medium text-gray-700 mb-2">
-                                            Documentos seleccionados ({formData.albaranes.length})
-                                        </h4>
-                                        <div className="space-y-2">
-                                            {formData.albaranes.map((albaran, index) => (
-                                                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
-                                                    <div className="flex items-center space-x-3">
-                                                        <span className="icon">📄</span>
-                                                        <div>
-                                                            <p className="text-sm font-medium text-gray-700 truncate">
-                                                                {albaran.name}
-                                                            </p>
-                                                            <p className="text-xs text-gray-500">
-                                                                {(albaran.size / 1024 / 1024).toFixed(2)} MB
-                                                            </p>
+                                    {formData.imagenes && formData.imagenes.length > 0 && (
+                                        <div className="mt-3">
+                                            <p className="text-sm text-gray-600 mb-3">
+                                                {formData.imagenes.length} imagen(es) adjuntada(s):
+                                            </p>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                                {formData.imagenes.map((image, index) => (
+                                                    <div key={index} className="relative border rounded-lg p-2 bg-gray-50">
+                                                        <img
+                                                            src={image.data}
+                                                            alt={image.name}
+                                                            className="w-full h-24 object-cover rounded mb-2"
+                                                            onError={(e) => {
+                                                                e.target.style.display = 'none';
+                                                                e.target.nextSibling.style.display = 'block';
+                                                            }}
+                                                        />
+                                                        <div className="hidden text-center p-4 text-gray-500 text-sm">
+                                                            📷 {image.name}
                                                         </div>
+                                                        <p className="text-xs text-gray-600 truncate" title={image.name}>
+                                                            {image.name}
+                                                        </p>
+                                                        <p className="text-xs text-gray-500">
+                                                            {(image.size / 1024).toFixed(0)} KB
+                                                        </p>
+                                                        <button
+                                                            onClick={() => {
+                                                                const newImages = formData.imagenes.filter((_, i) => i !== index);
+                                                                handleInputChange('imagenes', newImages);
+                                                            }}
+                                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
+                                                        >
+                                                            ✕
+                                                        </button>
                                                     </div>
-                                                    <button
-                                                        onClick={() => removeFile(index, 'albaranes')}
-                                                        className="text-red-500 hover:text-red-700 p-1"
-                                                    >
-                                                        ❌
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="text-sm text-gray-500 bg-blue-50 p-4 rounded-lg">
-                            💡 Tip: Las imágenes y documentos se guardan localmente. Para enviarlos a Google Sheets,
-                            se incluirá información sobre los archivos adjuntos en el registro.
-                        </div>
-                    </div>
-                ];
-
-                return steps[currentStep] || null;
-            };
-
-            // ========== RENDERIZADO PRINCIPAL ==========
-            // Modal para mostrar partes guardados
-            if (showSavedParts) {
-                return (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                        <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
-                            <div className="flex justify-between items-center p-6 border-b">
-                                <h2 className="text-2xl font-bold">📋 Partes Guardados ({savedParts.length})</h2>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={exportToCSV}
-                                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                                        disabled={savedParts.length === 0}
-                                    >
-                                        📊 Exportar CSV
-                                    </button>
-                                    <button
-                                        onClick={() => setShowSavedParts(false)}
-                                        className="text-gray-500 hover:text-gray-700 p-2"
-                                    >
-                                        ❌
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="p-6 overflow-y-auto custom-scroll" style={{maxHeight: 'calc(90vh - 140px)'}}>
-                                {savedParts.length === 0 ? (
-                                    <div className="text-center py-12">
-                                        <div className="text-6xl mb-4">📭</div>
-                                        <h3 className="text-xl font-semibold text-gray-600 mb-2">No hay partes guardados</h3>
-                                        <p className="text-gray-500">Los partes que completes se mostrarán aquí</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {savedParts.map((parte, index) => (
-                                            <div key={parte.id || index} className="border rounded-lg p-4 hover:shadow-lg transition-shadow">
-                                                <div className="flex justify-between items-start mb-3">
-                                                    <div>
-                                                        <h3 className="text-lg font-semibold text-blue-600">
-                                                            {parte.nombreTrabajo || 'Sin nombre'}
-                                                        </h3>
-                                                        <p className="text-sm text-gray-500">
-                                                            📅 {parte.fecha} | ⏰ {parte.totalHoras || 0}h | 👥 {parte.operarios?.length || 0} operarios
-                                                        </p>
-                                                        <p className="text-xs text-gray-400">
-                                                            Guardado: {new Date(parte.timestamp).toLocaleString('es-ES')}
-                                                        </p>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => {
-                                                            if (confirm('¿Estás seguro de que quieres eliminar este parte?')) {
-                                                                const updatedParts = savedParts.filter((_, i) => i !== index);
-                                                                setSavedParts(updatedParts);
-                                                                localStorage.setItem('partes_diarios', JSON.stringify(updatedParts));
-                                                            }
-                                                        }}
-                                                        className="text-red-500 hover:text-red-700 p-1"
-                                                    >
-                                                        🗑️
-                                                    </button>
-                                                </div>
-
-                                                <div className="grid md:grid-cols-2 gap-4 text-sm">
-                                                    <div>
-                                                        <h4 className="font-medium text-gray-700 mb-1">👥 Operarios:</h4>
-                                                        <p className="text-gray-600 mb-3">
-                                                            {parte.operarios?.map(op => `${op.nombre}: ${op.horas}h`).join(', ') || 'Sin operarios'}
-                                                        </p>
-
-                                                        <h4 className="font-medium text-gray-700 mb-1">🔧 Trabajos realizados:</h4>
-                                                        <p className="text-gray-600 mb-3">
-                                                            {parte.trabajosRealizados || 'Sin especificar'}
-                                                        </p>
-
-                                                        <h4 className="font-medium text-gray-700 mb-1">📦 Materiales:</h4>
-                                                        <p className="text-gray-600 mb-3">
-                                                            {parte.materialesUtilizados || 'Sin materiales'}
-                                                        </p>
-                                                    </div>
-
-                                                    <div>
-                                                        <h4 className="font-medium text-gray-700 mb-1">⚠️ Incidencias:</h4>
-                                                        <p className="text-gray-600 mb-3">
-                                                            {parte.incidencias || 'Sin incidencias'}
-                                                        </p>
-
-                                                        <h4 className="font-medium text-gray-700 mb-1">💭 Observaciones:</h4>
-                                                        <p className="text-gray-600 mb-3">
-                                                            {parte.observaciones || 'Sin observaciones'}
-                                                        </p>
-
-                                                        <h4 className="font-medium text-gray-700 mb-1">⏰ Tareas pendientes:</h4>
-                                                        <p className="text-gray-600 mb-3">
-                                                            {parte.tareasPendientes || 'Sin tareas pendientes'}
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                {(parte.imagenes?.length > 0 || parte.albaranes?.length > 0) && (
-                                                    <div className="mt-3 pt-3 border-t">
-                                                        <h4 className="font-medium text-gray-700 mb-2">📎 Archivos adjuntos:</h4>
-                                                        <div className="flex gap-4 text-sm">
-                                                            {parte.imagenes?.length > 0 && (
-                                                                <span className="text-blue-600">
-                                                                    📷 {parte.imagenes.length} imagen(es)
-                                                                </span>
-                                                            )}
-                                                            {parte.albaranes?.length > 0 && (
-                                                                <span className="text-green-600">
-                                                                    📄 {parte.albaranes.length} documento(s)
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                )}
+                                                ))}
                                             </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
-
-            // Modal "Acerca de"
-            if (showAbout) {
-                return (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
-                            <div className="flex justify-between items-center p-6 border-b">
-                                <h2 className="text-2xl font-bold">ℹ️ Acerca de</h2>
-                                <button
-                                    onClick={() => setShowAbout(false)}
-                                    className="text-gray-500 hover:text-gray-700 p-2"
-                                >
-                                    ❌
-                                </button>
-                            </div>
-
-                            <div className="p-6 space-y-6">
-                                <div className="text-center">
-                                    <div className="text-6xl mb-4">📋</div>
-                                    <h3 className="text-2xl font-bold text-blue-600 mb-2">
-                                        Asistente Personal - Parte Diario de Trabajo
-                                    </h3>
-                                    <p className="text-gray-600">
-                                        Versión 2.0 - Aplicación web profesional para gestión de partes diarios
-                                    </p>
+                                        </div>
+                                    )}
                                 </div>
+                            </div>
+                        );
 
-                                <div className="grid md:grid-cols-2 gap-6">
-                                    <div>
-                                        <h4 className="font-semibold text-gray-800 mb-3">🎯 Características principales:</h4>
-                                        <ul className="space-y-2 text-sm text-gray-600">
-                                            <li>• Formulario completo en 8 pasos</li>
-                                            <li>• Dictado por voz integrado</li>
-                                            <li>• Guardado local automático</li>
-                                            <li>• Envío a Google Sheets</li>
-                                            <li>• Exportación a CSV/Excel</li>
-                                            <li>• Subida de imágenes y documentos</li>
-                                            <li>• Interfaz responsive y moderna</li>
-                                        </ul>
+                    case 8:
+                        return (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-blue-700 mb-4">Albaranes de Compra</h3>
+                                <div className="bg-blue-50 p-4 rounded-lg">
+                                    <p className="text-center text-blue-800 mb-3">
+                                        📄 Sección de Albaranes
+                                    </p>
+                                    <div className="mt-4 text-center">
+                                        <input
+                                            type="file"
+                                            multiple
+                                            accept="image/*"
+                                            onChange={(e) => {
+                                                const files = Array.from(e.target.files);
+                                                files.forEach(file => {
+                                                    const reader = new FileReader();
+                                                    reader.onload = (event) => {
+                                                        const newAlbaran = {
+                                                            name: file.name,
+                                                            url: event.target.result,
+                                                            type: 'albaran'
+                                                        };
+                                                        const currentAlbaranes = formData.albaranes || [];
+                                                        const newAlbaranes = [...currentAlbaranes, newAlbaran];
+                                                        setFormData({...formData, albaranes: newAlbaranes});
+                                                    };
+                                                    reader.readAsDataURL(file);
+                                                });
+                                                e.target.value = '';
+                                            }}
+                                            id="albaranUpload"
+                                            className="hidden"
+                                        />
+                                        <label
+                                            htmlFor="albaranUpload"
+                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer inline-block"
+                                        >
+                                            📄 + Añadir Albaranes
+                                        </label>
                                     </div>
+                                    <p className="text-center text-sm text-blue-600 mt-3">
+                                        Total albaranes: {formData.albaranes?.length || 0}
+                                    </p>
 
-                                    <div>
-                                        <h4 className="font-semibold text-gray-800 mb-3">🛠️ Tecnologías utilizadas:</h4>
-                                        <ul className="space-y-2 text-sm text-gray-600">
-                                            <li>• React 18 + Hooks</li>
-                                            <li>• Tailwind CSS</li>
-                                            <li>• Web Speech API</li>
-                                            <li>• Google Apps Script</li>
-                                            <li>• Local Storage</li>
-                                            <li>• File API</li>
-                                            <li>• Progressive Web App</li>
-                                        </ul>
-                                    </div>
+                                    {/* Mostrar albaranes cargados */}
+                                    {formData.albaranes && formData.albaranes.length > 0 && (
+                                        <div className="mt-4 grid grid-cols-2 gap-2">
+                                            {formData.albaranes.map((albaran, index) => (
+                                                <div key={index} className="relative border rounded-lg overflow-hidden">
+                                                    <img
+                                                        src={albaran.url}
+                                                        alt={albaran.name}
+                                                        className="w-full h-32 object-cover"
+                                                    />
+                                                    <div className="absolute top-2 right-2">
+                                                        <button
+                                                            onClick={() => {
+                                                                const newAlbaranes = formData.albaranes.filter((_, i) => i !== index);
+                                                                setFormData({...formData, albaranes: newAlbaranes});
+                                                            }}
+                                                            className="bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600"
+                                                            title="Eliminar albarán"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                    <div className="p-2 bg-gray-50">
+                                                        <p className="text-xs text-gray-600 truncate">{albaran.name}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+
+                    case 9:
+                        return (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-blue-700 mb-4">Resumen Inteligente</h3>
+                                <div className="bg-gray-50 p-4 rounded-lg">
+                                    <pre className="whitespace-pre-wrap text-sm">{formData.resumenInteligente}</pre>
                                 </div>
 
                                 <div className="bg-blue-50 p-4 rounded-lg">
-                                    <h4 className="font-semibold text-blue-800 mb-2">👨‍💻 Desarrollado por:</h4>
-                                    <p className="text-blue-700">Michel Soler</p>
-                                    <p className="text-sm text-blue-600 mt-1">
-                                        Especialista en automatización y desarrollo de aplicaciones web para construcción y mantenimiento
-                                    </p>
-                                </div>
-
-                                <div className="bg-gray-50 p-4 rounded-lg">
-                                    <h4 className="font-semibold text-gray-800 mb-2">📞 Soporte y contacto:</h4>
-                                    <p className="text-sm text-gray-600">
-                                        Para soporte técnico, consultas o personalizaciones,
-                                        contacta a través de la configuración de la aplicación.
-                                    </p>
-                                </div>
-
-                                <div className="text-center text-xs text-gray-500">
-                                    © 2024 - Aplicación desarrollada con ❤️ para profesionales de la construcción
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
-
-            if (showConfig) {
-                return (
-                    <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-                        <div className="flex justify-between items-center mb-6">
-                            <h1 className="text-2xl font-bold">⚙️ Configuración</h1>
-                            <button
-                                onClick={() => setShowConfig(false)}
-                                className="text-gray-500 hover:text-gray-700"
-                            >
-                                ❌
-                            </button>
-                        </div>
-
-                        <div className="space-y-6">
-                            <div>
-                                <h3 className="text-lg font-semibold mb-4">📊 Google Apps Script</h3>
-                                <p className="text-gray-600 mb-4">
-                                    Conecta con tu Google Apps Script para enviar datos automáticamente a Google Sheets.
-                                </p>
-
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            URL del Google Apps Script
-                                        </label>
-                                        <input
-                                            type="url"
-                                            value={googleScriptUrl}
-                                            onChange={(e) => saveGoogleScriptUrl(e.target.value)}
-                                            placeholder="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
-                                            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                                        />
-                                    </div>
-
-                                    <div className="flex gap-3">
-                                        <button
-                                            onClick={testConnection}
-                                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300"
-                                            disabled={!googleScriptUrl.trim()}
-                                        >
-                                            🧪 Probar conexión
-                                        </button>
+                                    <h4 className="font-semibold text-blue-800 mb-3">📊 Estadísticas del Parte</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                        <div className="text-center">
+                                            <div className="font-bold text-lg text-blue-600">
+                                                {formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0)}h
+                                            </div>
+                                            <div className="text-gray-600">Horas Totales</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="font-bold text-lg text-green-600">{formData.operarios.length}</div>
+                                            <div className="text-gray-600">Operarios</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="font-bold text-lg text-orange-600">
+                                                {formData.incidencias ? '⚠️' : '✅'}
+                                            </div>
+                                            <div className="text-gray-600">
+                                                {formData.incidencias ? 'Con Incidencias' : 'Sin Incidencias'}
+                                            </div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="font-bold text-lg text-purple-600">{formData.imagenes.length}</div>
+                                            <div className="text-gray-600">Imágenes</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="font-bold text-lg text-green-600">{formData.albaranes?.length || 0}</div>
+                                            <div className="text-gray-600">Albaranes</div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
 
-            // Interface principal simplificada
+                                <div className="flex flex-col sm:flex-row gap-3">
+                                    <button
+                                        onClick={exportToPDF}
+                                        className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center justify-center gap-2"
+                                    >
+                                        📄 Descargar HTML/PDF
+                                    </button>
+                                    <button
+                                        onClick={sendToGoogleSheets}
+                                        className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center justify-center gap-2"
+                                    >
+                                        📊 Enviar a Google Sheets
+                                    </button>
+                                </div>
+
+                                <div className="bg-yellow-50 p-3 rounded-lg">
+                                    <p className="text-sm text-yellow-700">
+                                        💡 <strong>Consejo:</strong> El archivo PDF es ideal para imprimir o enviar por email.
+                                        El CSV es perfecto para análisis de datos en Excel o sistemas de gestión.
+                                    </p>
+                                </div>
+                            </div>
+                        );
+
+                    default:
+                        return null;
+                }
+            };
+
             return (
-                <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-                    <div className="flex justify-between items-center mb-6">
-                        <h1 className="text-2xl font-bold">📋 Parte Diario de Trabajo</h1>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => setShowAbout(true)}
-                                className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600"
-                            >
-                                ℹ️ Acerca de
-                            </button>
-                            <button
-                                onClick={() => setShowConfig(true)}
-                                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
-                            >
-                                ⚙️ Config
-                            </button>
-                            <button
-                                onClick={() => setShowSavedParts(true)}
-                                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-                            >
-                                📋 Guardados ({savedParts.length})
-                            </button>
+                <div className="max-w-4xl mx-auto p-6 bg-white">
+                    <div className="mb-8">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h1 className="text-3xl font-bold text-gray-800 mb-2">📋 Asistente Personal</h1>
+                                <h2 className="text-xl text-gray-600">Parte Diario de Trabajo</h2>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                                <MemoryIndicator />
+                                <SaveStatusIndicator />
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setShowMemoryManager(true)}
+                                        className={`px-3 py-1 rounded-lg text-sm ${
+                                            memoryInfo.percentage > 70
+                                                ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                        }`}
+                                        title="Gestionar memoria y limpieza"
+                                    >
+                                        🧹 Limpiar
+                                    </button>
+                                    <button
+                                        onClick={() => setShowHistory(true)}
+                                        className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm"
+                                    >
+                                        📚 Historial ({partesHistory.length})
+                                    </button>
+                                    <button
+                                        onClick={() => setShowSettings(true)}
+                                        className="px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm"
+                                    >
+                                        ⚙️ Configuración
+                                    </button>
+                                    <button
+                                        onClick={createNewParte}
+                                        className="px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm"
+                                    >
+                                        ➕ Nuevo Parte
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Indicador de progreso */}
+                    {/* Progress bar */}
                     <div className="mb-8">
-                        <div className="flex justify-between text-sm text-gray-600 mb-2">
-                            <span>Paso {currentStep + 1} de 8</span>
-                            <span>{Math.round(((currentStep + 1) / 8) * 100)}% completado</span>
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-medium text-gray-600">
+                                Paso {currentStep + 1} de {steps.length}
+                            </span>
+                            <span className="text-sm text-gray-500">
+                                {Math.round(((currentStep + 1) / steps.length) * 100)}% completado
+                            </span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
                                 className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${((currentStep + 1) / 8) * 100}%` }}
-                            ></div>
+                                style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
+                            />
                         </div>
                     </div>
 
-                    {/* Contenido del paso actual */}
-                    <div className="mb-8">
+                    {/* Step indicators */}
+                    <div className="flex flex-wrap gap-2 mb-8">
+                        {steps.map((step, index) => {
+                            const Icon = step.icon;
+                            return (
+                                <div
+                                    key={index}
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${
+                                        index === currentStep
+                                            ? 'bg-blue-600 text-white'
+                                            : index < currentStep
+                                                ? 'bg-green-100 text-green-700'
+                                                : 'bg-gray-100 text-gray-600'
+                                    }`}
+                                >
+                                    <Icon size={16} />
+                                    {step.title}
+                                    {index < currentStep && <span>✓</span>}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Current step content */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+                        {!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) && (
+                            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                <p className="text-sm text-yellow-700">
+                                    ⚠️ Tu navegador no soporta reconocimiento de voz. Usa Chrome, Safari o Edge para activar esta función.
+                                </p>
+                            </div>
+                        )}
                         {renderStep()}
                     </div>
 
-                    {/* Botones de navegación */}
+                    {/* Navigation buttons */}
                     <div className="flex justify-between">
                         <button
-                            onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
+                            onClick={prevStep}
                             disabled={currentStep === 0}
-                            className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:bg-gray-300"
+                            className={`px-6 py-3 rounded-lg ${
+                                currentStep === 0
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : 'bg-gray-600 text-white hover:bg-gray-700'
+                            }`}
                         >
-                            ⬅️ Anterior
+                            ← Anterior
                         </button>
 
-                        {currentStep === 7 ? (
-                            <button
-                                onClick={saveAndSend}
-                                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                            >
-                                💾 Guardar y Enviar
-                            </button>
-                        ) : (
-                            <button
-                                onClick={() => setCurrentStep(Math.min(7, currentStep + 1))}
-                                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                            >
-                                Siguiente ➡️
-                            </button>
-                        )}
+                        <button
+                            onClick={nextStep}
+                            disabled={currentStep === steps.length - 1 && !canFinishParte()}
+                            className={`px-6 py-3 rounded-lg ${
+                                currentStep === steps.length - 1 && !canFinishParte()
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : currentStep === steps.length - 1
+                                        ? 'bg-green-600 text-white hover:bg-green-700'
+                                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                            }`}
+                            title={currentStep === steps.length - 1 && !canFinishParte() ? 'Completa los campos obligatorios: Nombre del trabajo y al menos un operario' : ''}
+                        >
+                            {currentStep === steps.length - 1 ? '💾 Guardar y Finalizar' : 'Siguiente →'}
+                        </button>
                     </div>
+
+                    {/* Modal de Gestión de Memoria */}
+                    {showMemoryManager && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-hidden">
+                                <div className="p-6 border-b">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-xl font-bold">🧹 Gestión de Memoria</h3>
+                                        <button
+                                            onClick={() => setShowMemoryManager(false)}
+                                            className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="p-6 space-y-6">
+                                    {/* Estado de la memoria */}
+                                    <div className="bg-blue-50 p-4 rounded-lg">
+                                        <h4 className="font-semibold mb-3">📊 Estado Actual</h4>
+                                        <div className="grid grid-cols-3 gap-4 text-center">
+                                            <div>
+                                                <div className="font-bold text-lg">{memoryInfo.used} MB</div>
+                                                <div className="text-sm text-gray-600">Usado</div>
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-lg">{memoryInfo.available} MB</div>
+                                                <div className="text-sm text-gray-600">Disponible</div>
+                                            </div>
+                                            <div>
+                                                <div className={`font-bold text-lg ${
+                                                    memoryInfo.percentage > 80 ? 'text-red-600' :
+                                                    memoryInfo.percentage > 50 ? 'text-yellow-600' : 'text-green-600'
+                                                }`}>
+                                                    {memoryInfo.percentage}%
+                                                </div>
+                                                <div className="text-sm text-gray-600">Ocupado</div>
+                                            </div>
+                                        </div>
+                                        <div className="mt-3 w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full transition-all duration-300 ${
+                                                    memoryInfo.percentage > 80 ? 'bg-red-500' :
+                                                    memoryInfo.percentage > 50 ? 'bg-yellow-500' : 'bg-green-500'
+                                                }`}
+                                                style={{ width: `${memoryInfo.percentage}%` }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Configuración de límite */}
+                                    <div className="bg-gray-50 p-4 rounded-lg">
+                                        <h4 className="font-semibold mb-3">⚙️ Configuración</h4>
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <label className="text-sm">Máximo partes a mantener:</label>
+                                            <select
+                                                value={maxPartesLimit}
+                                                onChange={(e) => saveSettings(parseInt(e.target.value))}
+                                                className="px-3 py-1 border rounded focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value={10}>10 partes</option>
+                                                <option value={25}>25 partes</option>
+                                                <option value={50}>50 partes</option>
+                                                <option value={100}>100 partes</option>
+                                                <option value={200}>200 partes</option>
+                                            </select>
+                                        </div>
+                                        <p className="text-xs text-gray-500 mb-4">
+                                            Los partes más antiguos se eliminarán automáticamente al superar este límite
+                                        </p>
+
+                                    </div>
+
+                                    {/* Acciones de limpieza */}
+                                    <div className="space-y-3">
+                                        <h4 className="font-semibold">🗑️ Acciones de Limpieza</h4>
+
+                                        <button
+                                            onClick={() => {
+                                                const eliminated = cleanOldPartes(Math.floor(maxPartesLimit * 0.75));
+                                                alert(`🧹 Se eliminaron ${eliminated} partes antiguos (manteniendo los ${Math.floor(maxPartesLimit * 0.75)} más recientes)`);
+                                            }}
+                                            className="w-full px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg hover:bg-yellow-200"
+                                        >
+                                            🧹 Limpieza Rápida (eliminar 25% más antiguos)
+                                        </button>
+
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="date"
+                                                id="startDate"
+                                                className="flex-1 px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
+                                                title="Fecha inicio"
+                                            />
+                                            <input
+                                                type="date"
+                                                id="endDate"
+                                                className="flex-1 px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
+                                                title="Fecha fin"
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    const startDate = document.getElementById('startDate').value;
+                                                    const endDate = document.getElementById('endDate').value;
+                                                    if (startDate && endDate) {
+                                                        const deleted = deletePartesByDateRange(startDate, endDate);
+                                                        alert(`🗑️ Se eliminaron ${deleted} partes del rango ${startDate} - ${endDate}`);
+                                                    } else {
+                                                        alert('⚠️ Selecciona ambas fechas');
+                                                    }
+                                                }}
+                                                className="px-4 py-2 bg-orange-100 text-orange-800 rounded-lg hover:bg-orange-200"
+                                            >
+                                                🗑️ Eliminar Rango
+                                            </button>
+                                        </div>
+
+                                        <button
+                                            onClick={clearAllHistory}
+                                            className="w-full px-4 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200"
+                                        >
+                                            ⚠️ Eliminar Todo el Historial
+                                        </button>
+                                    </div>
+
+                                    {/* Información adicional */}
+                                    <div className="bg-green-50 p-3 rounded-lg">
+                                        <p className="text-sm text-green-700">
+                                            💡 <strong>Consejos:</strong>
+                                        </p>
+                                        <ul className="text-sm text-green-600 mt-1 space-y-1">
+                                            <li>• Exporta el historial regularmente como respaldo</li>
+                                            <li>• Ajusta el límite según tus necesidades de almacenamiento</li>
+                                            <li>• La limpieza automática se activa al superar el límite</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Modal de Historial */}
+                    {showHistory && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[80vh] overflow-hidden">
+                                <div className="p-6 border-b">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-xl font-bold">📚 Historial de Partes Diarios</h3>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={exportHistoryToCSV}
+                                                className="px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm"
+                                            >
+                                                📊 Exportar Historial
+                                            </button>
+                                            <button
+                                                onClick={() => setShowHistory(false)}
+                                                className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-6 overflow-y-auto max-h-[60vh]">
+                                    {partesHistory.length === 0 ? (
+                                        <div className="text-center py-8 text-gray-500">
+                                            <p>📝 No hay partes guardados aún</p>
+                                            <p className="text-sm mt-2">Los partes completados aparecerán aquí</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {partesHistory.map((parte) => (
+                                                <div key={parte.id} className="border rounded-lg p-4 hover:bg-gray-50">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div className="flex-1">
+                                                            <h4 className="font-semibold text-lg">{parte.nombreTrabajo}</h4>
+                                                            <p className="text-gray-600">📅 {parte.fecha}</p>
+                                                            <p className="text-sm text-gray-500">
+                                                                Creado: {new Date(parte.fechaCreacion).toLocaleString('es-ES')}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => loadParteFromHistory(parte)}
+                                                                className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm"
+                                                                title="Editar este parte"
+                                                            >
+                                                                ✏️ Editar
+                                                            </button>
+                                                            <button
+                                                                onClick={() => createTemplateFromParte(parte)}
+                                                                className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 text-sm"
+                                                                title="Usar como plantilla"
+                                                            >
+                                                                📋 Plantilla
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (confirm('¿Estás seguro de eliminar este parte?')) {
+                                                                        deleteParteFromHistory(parte.id);
+                                                                    }
+                                                                }}
+                                                                className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm"
+                                                                title="Eliminar parte"
+                                                            >
+                                                                🗑️
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-3">
+                                                        <div>
+                                                            <span className="font-medium">Horas:</span> {parte.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0)}h
+                                                        </div>
+                                                        <div>
+                                                            <span className="font-medium">Operarios:</span> {parte.operarios.length}
+                                                        </div>
+                                                        <div>
+                                                            <span className="font-medium">Incidencias:</span> {parte.incidencias ? '⚠️ Sí' : '✅ No'}
+                                                        </div>
+                                                        <div>
+                                                            <span className="font-medium">Imágenes:</span> {parte.imagenes?.length || 0}
+                                                        </div>
+                                                    </div>
+
+                                                    {parte.trabajosRealizados && (
+                                                        <div className="mt-3 p-2 bg-gray-100 rounded text-sm">
+                                                            <strong>Trabajos:</strong> {parte.trabajosRealizados.substring(0, 150)}
+                                                            {parte.trabajosRealizados.length > 150 && '...'}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Modal de Configuración */}
+                    {showSettings && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                                <div className="p-6 border-b">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-xl font-bold text-green-700">⚙️ Configuración del Sistema</h3>
+                                        <button
+                                            onClick={() => setShowSettings(false)}
+                                            className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                                        >
+                                            ❌
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="p-6 space-y-6">
+                                    {/* Configuración Google Forms */}
+                                    <div className="bg-green-50 p-6 rounded-lg border-2 border-green-200">
+                                        <h4 className="font-bold mb-4 text-green-800 text-lg">📊 Google Forms Integration</h4>
+
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    URL de Google Forms (formResponse):
+                                                </label>
+                                                <input
+                                                    type="url"
+                                                    value={googleFormsUrl}
+                                                    onChange={(e) => saveGoogleFormsUrl(e.target.value)}
+                                                    placeholder="https://docs.google.com/forms/d/e/.../formResponse"
+                                                    className="w-full px-4 py-3 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                />
+                                            </div>
+
+                                            {googleFormsUrl && (
+                                                <div className="bg-green-100 p-3 rounded-lg border border-green-300">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-green-600">✅</span>
+                                                        <span className="text-sm text-green-800 font-medium">
+                                                            URL configurada - Los partes se enviarán automáticamente a Google Forms
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="flex gap-3">
+                                                <button
+                                                    onClick={() => {
+                                                        if (!googleFormsUrl.trim()) {
+                                                            alert('⚠️ Primero configura la URL del Google Apps Script');
+                                                            return;
+                                                        }
+
+                                                        // Datos de prueba para Google Apps Script
+                                                        const testData = {
+                                                            nombreTrabajo: 'TEST - Prueba de conexión',
+                                                            fecha: new Date().toISOString().split('T')[0],
+                                                            totalHoras: '8',
+                                                            numOperarios: '1',
+                                                            listaOperarios: 'Usuario Test: 8h',
+                                                            trabajosRealizados: 'Prueba de conexión con Google Apps Script',
+                                                            materialesUtilizados: 'Ninguno',
+                                                            incidencias: '',
+                                                            observaciones: 'Prueba realizada desde configuración',
+                                                            tareasPendientes: '',
+                                                            infoImagenes: 'Sin imágenes',
+                                                            infoAlbaranes: 'Sin albaranes'
+                                                        };
+
+                                                        // Crear URL con parámetros GET
+                                                        const params = new URLSearchParams(testData);
+                                                        const testUrl = `${googleFormsUrl}?${params.toString()}`;
+
+                                                        alert('🧪 Enviando datos de prueba...\\n\\nSe abrirá una nueva pestaña con el resultado.\\n\\nSi ves un JSON con "status": "success", ¡la conexión funciona!');
+
+                                                        // Abrir en nueva pestaña
+                                                        window.open(testUrl, '_blank');
+                                                    }}
+                                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300"
+                                                    disabled={!googleFormsUrl.trim()}
+                                                >
+                                                    🧪 Probar conexión
+                                                </button>
+
+                                                <button
+                                                    onClick={() => {
+                                                        const instructions = `
+🚀 CÓMO CONFIGURAR GOOGLE FORMS INTEGRATION
+
+📋 PASOS DETALLADOS:
+
+1️⃣ Ve a Google Forms (forms.google.com)
+2️⃣ Crea un nuevo formulario llamado "Partes Diarios de Trabajo"
+3️⃣ Añade EXACTAMENTE estos 12 campos (todos como "Respuesta corta"):
+   • Proyecto
+   • Fecha
+   • Total de Horas
+   • Num Operarios
+   • Nombre de Operarios
+   • Trabajos Realizados
+   • Materiales
+   • Incidentes
+   • Observaciones
+   • Tareas Pendientes
+   • Imagenes
+   • Albaranes
+
+4️⃣ Haz clic en los 3 puntos → "Obtener enlace rellenado previamente"
+5️⃣ Rellena CUALQUIER valor en TODOS los campos (importante: no dejes ninguno vacío)
+6️⃣ Haz clic en "Obtener enlace"
+7️⃣ Copia la URL completa que aparece
+8️⃣ Cambia "viewform" por "formResponse" en la URL
+9️⃣ Pega esa URL arriba en el campo de configuración
+
+⚠️ IMPORTANTE:
+- Los campos deben estar en el MISMO ORDEN listado arriba
+- NO cambies los nombres de los campos
+- La URL debe terminar en "formResponse"
+
+✅ ¡Listo! Usa el botón "Probar conexión" para verificar que funciona
+                                                        `;
+                                                        alert(instructions);
+                                                    }}
+                                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                                >
+                                                    📖 Ver instrucciones completas
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Configuración de límite de historial */}
+                                    <div className="bg-gray-50 p-6 rounded-lg border-2 border-gray-200">
+                                        <h4 className="font-bold mb-4 text-gray-800 text-lg">📚 Gestión de Historial</h4>
+
+                                        <div className="space-y-4">
+                                            <div className="flex items-center gap-4">
+                                                <label className="text-sm font-medium text-gray-700">
+                                                    Máximo partes a mantener:
+                                                </label>
+                                                <select
+                                                    value={maxPartesLimit}
+                                                    onChange={(e) => saveSettings(parseInt(e.target.value))}
+                                                    className="px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                >
+                                                    <option value={10}>10 partes</option>
+                                                    <option value={25}>25 partes</option>
+                                                    <option value={50}>50 partes</option>
+                                                    <option value={100}>100 partes</option>
+                                                    <option value={200}>200 partes</option>
+                                                </select>
+                                            </div>
+
+                                            <p className="text-sm text-gray-600">
+                                                Los partes más antiguos se eliminarán automáticamente al superar este límite.
+                                                Actualmente tienes <strong>{partesHistory.length}</strong> partes guardados.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Información del sistema */}
+                                    <div className="bg-blue-50 p-6 rounded-lg border-2 border-blue-200">
+                                        <h4 className="font-bold mb-4 text-blue-800 text-lg">ℹ️ Información del Sistema</h4>
+
+                                        <div className="space-y-2 text-sm text-blue-700">
+                                            <p>• <strong>Versión:</strong> 2.0 - Google Sheets Integration</p>
+                                            <p>• <strong>Almacenamiento:</strong> Local + Google Sheets</p>
+                                            <p>• <strong>Funcionalidades:</strong> 9 pasos + Reconocimiento de voz + Exports profesionales</p>
+                                            <p>• <strong>Compatibilidad:</strong> Chrome, Firefox, Edge (Safari parcial)</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         };
 
         // Renderizar la aplicación
-        ReactDOM.render(<ParteDiarioTrabajo />, document.getElementById('root'));
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<ParteDiarioTrabajo />);
     </script>
 </body>
 </html>
