@@ -108,6 +108,7 @@
             const [currentParteId, setCurrentParteId] = useState(null);
             const [partesHistory, setPartesHistory] = useState([]);
             const recognitionRef = useRef(null);
+            const currentFieldRef = useRef('');
             const saveTimeoutRef = useRef(null);
 
             const [formData, setFormData] = useState({
@@ -650,28 +651,34 @@
                             }
                         }
 
+                        // Usar la ref para obtener el campo actual
+                        const fieldToUse = currentFieldRef.current || currentField;
+
                         // Mostrar texto provisional en tiempo real
-                        if (interimTranscript && currentField) {
-                            const currentValue = getCurrentFieldValue(currentField);
+                        if (interimTranscript && fieldToUse) {
+                            const currentValue = getCurrentFieldValue(fieldToUse);
                             const preview = currentValue + ' ' + interimTranscript;
-                            updateFieldPreview(currentField, preview);
+                            updateFieldPreview(fieldToUse, preview);
                         }
 
-                        // Actualizar con texto final
-                        if (finalTranscript) {
-                            handleVoiceInput(currentField, finalTranscript.trim());
+                        // Actualizar con texto final o intermedio si no hay final
+                        const textToProcess = finalTranscript || interimTranscript;
+                        if (textToProcess && textToProcess.trim() && fieldToUse) {
+                            handleVoiceInput(fieldToUse, textToProcess.trim());
                         }
                     };
 
                     recognitionRef.current.onend = () => {
                         setIsListening(false);
                         setCurrentField('');
+                        currentFieldRef.current = '';
                     };
 
                     recognitionRef.current.onerror = (event) => {
                         console.error('Error de reconocimiento de voz:', event.error);
                         setIsListening(false);
                         setCurrentField('');
+                        currentFieldRef.current = '';
                     };
                 }
 
@@ -709,6 +716,7 @@
 
                 if (!isListening) {
                     setCurrentField(fieldName);
+                    currentFieldRef.current = fieldName;
                     setIsListening(true);
 
                     try {
@@ -728,6 +736,7 @@
                     recognitionRef.current.stop();
                     setIsListening(false);
                     setCurrentField('');
+                    currentFieldRef.current = '';
                 }
             };
 
