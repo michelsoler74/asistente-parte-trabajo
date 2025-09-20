@@ -1282,8 +1282,12 @@ Sistema de Gestión de Partes Diarios v2.0 - Construcciones Profesionales
             <h4 style="color: #dc2626; margin: 20px 0 15px 0;">📄 ALBARANES Y DOCUMENTOS (${formData.albaranes.length})</h4>
             <div style="margin: 20px 0;">
                 ${formData.albaranes.map((albaran, index) => {
+                    // Detectar si es una imagen por tipo MIME o por extensión de archivo
+                    const isImage = (albaran.type && albaran.type.startsWith('image/')) ||
+                                  (albaran.name && /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(albaran.name));
+
                     // Si es una imagen, mostrarla
-                    if (albaran.type && albaran.type.startsWith('image/')) {
+                    if (isImage) {
                         return `
                             <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin: 15px 0; background: white;">
                                 <img src="${albaran.data || albaran.url}" alt="${albaran.name}" style="max-width: 100%; width: auto; height: auto; border-radius: 4px; margin: 0 auto 10px auto; display: block;">
