@@ -129,14 +129,23 @@
                     recognitionRef.current.lang = 'es-ES';
 
                     recognitionRef.current.onresult = (event) => {
+                        let interimTranscript = '';
                         let finalTranscript = '';
+
                         for (let i = event.resultIndex; i < event.results.length; i++) {
+                            const transcript = event.results[i][0].transcript;
                             if (event.results[i].isFinal) {
-                                finalTranscript += event.results[i][0].transcript;
+                                finalTranscript += transcript;
+                            } else {
+                                interimTranscript += transcript;
                             }
                         }
-                        if (finalTranscript) {
-                            handleVoiceInput(currentField, finalTranscript.trim());
+
+                        // Usar cualquier transcripción disponible
+                        const textToAdd = finalTranscript || interimTranscript;
+                        if (textToAdd && textToAdd.trim()) {
+                            console.log('🎤 Transcripción recibida:', textToAdd);
+                            handleVoiceInput(currentField, textToAdd.trim());
                         }
                     };
 
@@ -459,21 +468,35 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
             // Funciones de voz
             const startVoiceRecognition = (fieldName) => {
                 if (!recognitionRef.current) {
-                    alert('❌ Tu navegador no soporta reconocimiento de voz');
+                    alert('❌ Tu navegador no soporta reconocimiento de voz\n\nNecesitas usar Chrome, Edge o Safari');
                     return;
                 }
 
-                setIsListening(true);
-                setCurrentField(fieldName);
+                console.log('🎤 Iniciando reconocimiento para campo:', fieldName);
 
+                // Detener cualquier reconocimiento previo
                 try {
-                    recognitionRef.current.start();
-                    console.log('🎤 Iniciando reconocimiento de voz para:', fieldName);
-                } catch (error) {
-                    console.error('Error al iniciar reconocimiento:', error);
-                    setIsListening(false);
-                    setCurrentField('');
+                    recognitionRef.current.stop();
+                } catch (e) {
+                    // Ignorar error si no estaba corriendo
                 }
+
+                // Configurar el campo actual antes de iniciar
+                setCurrentField(fieldName);
+                setIsListening(true);
+
+                // Esperar un momento antes de iniciar el nuevo reconocimiento
+                setTimeout(() => {
+                    try {
+                        recognitionRef.current.start();
+                        console.log('✅ Reconocimiento iniciado correctamente para:', fieldName);
+                    } catch (error) {
+                        console.error('❌ Error al iniciar reconocimiento:', error);
+                        setIsListening(false);
+                        setCurrentField('');
+                        alert('❌ Error al iniciar el reconocimiento de voz\n\nIntenta de nuevo o verifica los permisos de micrófono');
+                    }
+                }, 100);
             };
 
             const stopVoiceRecognition = () => {
@@ -486,25 +509,36 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
 
             const handleVoiceInput = (fieldName, transcript) => {
                 console.log('🎤 Voz recibida:', { fieldName, transcript });
-                if (transcript) {
+
+                if (!transcript || !transcript.trim()) {
+                    console.log('❌ Transcripción vacía, ignorando');
+                    return;
+                }
+
+                try {
                     // Manejar campos especiales de operarios
                     if (fieldName.startsWith('operario_')) {
                         const parts = fieldName.split('_');
                         const operarioIndex = parseInt(parts[1]);
                         const operarioField = parts[2];
 
-                        if (operarioField === 'nombre') {
-                            const currentValue = formData.operarios[operarioIndex]?.nombre || '';
+                        console.log('👷 Actualizando operario:', { operarioIndex, operarioField });
+
+                        if (operarioField === 'nombre' && formData.operarios[operarioIndex]) {
+                            const currentValue = formData.operarios[operarioIndex].nombre || '';
                             const newValue = currentValue + (currentValue ? ' ' : '') + transcript;
+                            console.log('📝 Nombre operario:', { currentValue, newValue });
                             updateOperario(operarioIndex, 'nombre', newValue);
                         }
                     } else {
                         // Manejar campos normales
                         const currentValue = formData[fieldName] || '';
                         const newValue = currentValue + (currentValue ? ' ' : '') + transcript;
-                        console.log('📝 Actualizando campo:', { fieldName, currentValue, newValue });
+                        console.log('📝 Actualizando campo normal:', { fieldName, currentValue, newValue });
                         handleInputChange(fieldName, newValue);
                     }
+                } catch (error) {
+                    console.error('❌ Error en handleVoiceInput:', error);
                 }
             };
 
