@@ -132,23 +132,17 @@
                     console.log('✅ Configuración de voz completada');
 
                     recognitionRef.current.onresult = (event) => {
-                        let interimTranscript = '';
                         let finalTranscript = '';
 
                         for (let i = event.resultIndex; i < event.results.length; i++) {
-                            const transcript = event.results[i][0].transcript;
                             if (event.results[i].isFinal) {
-                                finalTranscript += transcript;
-                            } else {
-                                interimTranscript += transcript;
+                                finalTranscript += event.results[i][0].transcript;
                             }
                         }
 
-                        // Usar cualquier transcripción disponible
-                        const textToAdd = finalTranscript || interimTranscript;
-                        if (textToAdd && textToAdd.trim()) {
-                            console.log('🎤 Transcripción recibida:', textToAdd);
-                            handleVoiceInput(currentField, textToAdd.trim());
+                        // Actualizar con texto final
+                        if (finalTranscript) {
+                            handleVoiceInput(currentField, finalTranscript.trim());
                         }
                     };
 
@@ -157,36 +151,14 @@
                     };
 
                     recognitionRef.current.onend = () => {
-                        console.log('🔴 Reconocimiento terminado');
                         setIsListening(false);
                         setCurrentField('');
                     };
 
                     recognitionRef.current.onerror = (event) => {
-                        console.error('❌ ERROR EN RECONOCIMIENTO DE VOZ:', event.error);
-                        console.error('❌ Detalles del error:', event);
+                        console.error('Error de reconocimiento de voz:', event.error);
                         setIsListening(false);
                         setCurrentField('');
-
-                        // Mostrar error específico al usuario
-                        let errorMessage = 'Error en reconocimiento de voz: ';
-                        switch(event.error) {
-                            case 'not-allowed':
-                                errorMessage += 'Permisos de micrófono denegados. Ve a configuración del navegador.';
-                                break;
-                            case 'no-speech':
-                                errorMessage += 'No se detectó habla. Intenta hablar más cerca del micrófono.';
-                                break;
-                            case 'audio-capture':
-                                errorMessage += 'No se pudo acceder al micrófono.';
-                                break;
-                            case 'network':
-                                errorMessage += 'Error de red. Verifica tu conexión a internet.';
-                                break;
-                            default:
-                                errorMessage += event.error;
-                        }
-                        alert(errorMessage);
                     };
                 } else {
                     console.error('❌ Reconocimiento de voz NO soportado en este navegador');
@@ -500,35 +472,20 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
             // Funciones de voz
             const startVoiceRecognition = (fieldName) => {
                 if (!recognitionRef.current) {
-                    alert('❌ Tu navegador no soporta reconocimiento de voz\n\nNecesitas usar Chrome, Edge o Safari');
+                    alert('Tu navegador no soporta reconocimiento de voz');
                     return;
                 }
 
-                console.log('🎤 Iniciando reconocimiento para campo:', fieldName);
-
-                // Detener cualquier reconocimiento previo
-                try {
-                    recognitionRef.current.stop();
-                } catch (e) {
-                    // Ignorar error si no estaba corriendo
-                }
-
-                // Configurar el campo actual antes de iniciar
-                setCurrentField(fieldName);
                 setIsListening(true);
+                setCurrentField(fieldName);
 
-                // Esperar un momento antes de iniciar el nuevo reconocimiento
-                setTimeout(() => {
-                    try {
-                        recognitionRef.current.start();
-                        console.log('✅ Reconocimiento iniciado correctamente para:', fieldName);
-                    } catch (error) {
-                        console.error('❌ Error al iniciar reconocimiento:', error);
-                        setIsListening(false);
-                        setCurrentField('');
-                        alert('❌ Error al iniciar el reconocimiento de voz\n\nIntenta de nuevo o verifica los permisos de micrófono');
-                    }
-                }, 100);
+                try {
+                    recognitionRef.current.start();
+                } catch (error) {
+                    console.error('Error al iniciar reconocimiento:', error);
+                    setIsListening(false);
+                    setCurrentField('');
+                }
             };
 
             const stopVoiceRecognition = () => {
@@ -540,37 +497,18 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
             };
 
             const handleVoiceInput = (fieldName, transcript) => {
-                console.log('🎤 Voz recibida:', { fieldName, transcript });
+                console.log('📝 Transcripción recibida:', transcript, 'para campo:', fieldName);
 
-                if (!transcript || !transcript.trim()) {
-                    console.log('❌ Transcripción vacía, ignorando');
-                    return;
-                }
-
-                try {
-                    // Manejar campos especiales de operarios
-                    if (fieldName.startsWith('operario_')) {
-                        const parts = fieldName.split('_');
-                        const operarioIndex = parseInt(parts[1]);
-                        const operarioField = parts[2];
-
-                        console.log('👷 Actualizando operario:', { operarioIndex, operarioField });
-
-                        if (operarioField === 'nombre' && formData.operarios[operarioIndex]) {
-                            const currentValue = formData.operarios[operarioIndex].nombre || '';
-                            const newValue = currentValue + (currentValue ? ' ' : '') + transcript;
-                            console.log('📝 Nombre operario:', { currentValue, newValue });
-                            updateOperario(operarioIndex, 'nombre', newValue);
-                        }
-                    } else {
-                        // Manejar campos normales
-                        const currentValue = formData[fieldName] || '';
-                        const newValue = currentValue + (currentValue ? ' ' : '') + transcript;
-                        console.log('📝 Actualizando campo normal:', { fieldName, currentValue, newValue });
-                        handleInputChange(fieldName, newValue);
-                    }
-                } catch (error) {
-                    console.error('❌ Error en handleVoiceInput:', error);
+                if (fieldName.includes('operario-')) {
+                    const [, index, field] = fieldName.split('-');
+                    const operarioIndex = parseInt(index);
+                    const currentValue = formData.operarios[operarioIndex]?.[field] || '';
+                    const newValue = currentValue ? currentValue + ' ' + transcript : transcript;
+                    updateOperario(operarioIndex, field, newValue);
+                } else {
+                    const currentValue = formData[fieldName] || '';
+                    const newValue = currentValue ? currentValue + ' ' + transcript : transcript;
+                    handleInputChange(fieldName, newValue);
                 }
             };
 
@@ -1049,7 +987,7 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
                                                         placeholder="Nombre del operario"
                                                         className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                                                     />
-                                                    <VoiceButton fieldName={`operario_${index}_nombre`} />
+                                                    <VoiceButton fieldName={`operario-${index}-nombre`} />
                                                 </div>
                                             </div>
 
