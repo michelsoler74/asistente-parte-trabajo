@@ -272,7 +272,7 @@
 
             // Función para enviar datos a Google Sheets
             const sendToGoogleSheets = async () => {
-                const sheetsUrl = 'https://script.google.com/macros/s/AKfycbzd1-YudUWHUjxVGw5wjH-ZEgS5D0JMh7vag0gXLMwcy0zHLxw6cDYqd6cSnCmmXamRIQ/exec';
+                const sheetsUrl = 'https://script.google.com/macros/s/AKfycbzQGjiDOPgfogAJf0Zuhikm69uRsaAbmZcboiz8JdYonxc7GL_TslsYBITTyP02lT6YgA/exec';
 
                 // Mostrar indicador de carga
                 const loadingAlert = document.createElement('div');
@@ -323,14 +323,15 @@
                     let response;
                     let success = false;
 
-                    // Enviar datos al Google Apps Script
-                    console.log('🔄 Enviando a Google Apps Script...');
-                    response = await fetch(sheetsUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(dataToSend)
+                    // Enviar datos al Google Apps Script usando GET
+                    const params = new URLSearchParams(dataToSend);
+                    const getUrl = `${sheetsUrl}?${params.toString()}`;
+
+                    console.log('🔄 Enviando a Google Apps Script (GET)...');
+                    console.log('🔗 URL completa:', getUrl);
+
+                    response = await fetch(getUrl, {
+                        method: 'GET'
                     });
 
                     console.log('📊 Respuesta del servidor:', response.status, response.statusText);
