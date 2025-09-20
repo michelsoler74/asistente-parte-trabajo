@@ -153,10 +153,11 @@
                         console.log('🎤 interimTranscript:', interimTranscript);
                         console.log('🎤 currentField:', currentField);
 
-                        // Actualizar con texto final
-                        if (finalTranscript && finalTranscript.trim()) {
-                            console.log('🎤 LLAMANDO handleVoiceInput con:', currentField, finalTranscript.trim());
-                            handleVoiceInput(currentField, finalTranscript.trim());
+                        // Actualizar con cualquier transcripción disponible
+                        const textToProcess = finalTranscript || interimTranscript;
+                        if (textToProcess && textToProcess.trim()) {
+                            console.log('🎤 LLAMANDO handleVoiceInput con:', currentField, textToProcess.trim());
+                            handleVoiceInput(currentField, textToProcess.trim());
                         }
                     };
 
