@@ -272,7 +272,7 @@
 
             // Función para enviar datos a Google Sheets
             const sendToGoogleSheets = async () => {
-                const sheetsUrl = 'https://script.google.com/macros/s/AKfycbxsVvwHDFFBpCWgNFtDelKh1oMD3yra01fzEyv8cw2XNumaHaVUbB5fuYJ8Zu5VLKmT7A/exec';
+                const sheetsUrl = 'https://script.google.com/macros/s/AKfycbwkZJoitGnjrXS6aVeNZhlfGYsdtGDS1mH6EwW0KiRM9MQ92qq0feax_SvQoRTccUCGpw/exec';
 
                 // Mostrar indicador de carga
                 const loadingAlert = document.createElement('div');
@@ -315,7 +315,10 @@
                         observaciones: formData.observaciones || 'Sin observaciones',
                         tareasPendientes: formData.tareasPendientes || 'Sin tareas pendientes',
                         infoImagenes: infoImagenes,
-                        infoAlbaranes: infoAlbaranes
+                        infoAlbaranes: infoAlbaranes,
+                        numImagenes: (formData.imagenes?.length || 0).toString(),
+                        numAlbaranes: (formData.albaranes?.length || 0).toString(),
+                        nombresCarpetas: formData.nombreTrabajo || 'Sin especificar'
                     };
 
                     console.log('📊 ENVIANDO A GOOGLE APPS SCRIPT:', dataToSend);
