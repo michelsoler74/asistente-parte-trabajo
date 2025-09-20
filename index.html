@@ -272,7 +272,7 @@
 
             // Función para enviar datos a Google Sheets
             const sendToGoogleSheets = async () => {
-                const sheetsUrl = 'https://script.google.com/macros/s/AKfycby79TauHYudyv4CH7CP_x6s7TNqnkXDmIFPIt8IocKe8C0hMhuc5-Eg-ylleNN6UiZhhQ/exec';
+                const sheetsUrl = 'https://script.google.com/macros/s/AKfycbzd1-YudUWHUjxVGw5wjH-ZEgS5D0JMh7vag0gXLMwcy0zHLxw6cDYqd6cSnCmmXamRIQ/exec';
 
                 // Mostrar indicador de carga
                 const loadingAlert = document.createElement('div');
@@ -302,8 +302,8 @@
                         ? `📄 ${albaranesInfo.length} albarán(es): ${albaranesInfo.map(alb => alb.name).join(', ')}`
                         : 'Sin albaranes';
 
-                    // Preparar parámetros para GET
-                    const params = new URLSearchParams({
+                    // Preparar datos para Google Apps Script
+                    const dataToSend = {
                         nombreTrabajo: formData.nombreTrabajo || 'Sin especificar',
                         fecha: formData.fecha || new Date().toISOString().split('T')[0],
                         totalHoras: totalHoras.toString(),
@@ -316,20 +316,17 @@
                         tareasPendientes: formData.tareasPendientes || 'Sin tareas pendientes',
                         infoImagenes: infoImagenes,
                         infoAlbaranes: infoAlbaranes
-                    });
+                    };
 
-                    console.log('📊 ENVIANDO A GOOGLE SHEETS (GET):', params.toString());
+                    console.log('📊 ENVIANDO A GOOGLE APPS SCRIPT:', dataToSend);
 
-                    // URL completa para debug
-                    const fullUrl = `${sheetsUrl}?${params.toString()}`;
-                    console.log('🔗 URL COMPLETA:', fullUrl);
-
-                    // Debug: Mostrar URL para verificar
-                    alert(`🐛 DEBUG URL:\\n\\n${fullUrl.substring(0, 100)}...\\n\\n¿Esta URL se ve correcta?`);
-
-                    // Enviar datos usando GET con parámetros
-                    const response = await fetch(fullUrl, {
-                        method: 'GET'
+                    // Enviar datos usando POST al Google Apps Script
+                    const response = await fetch(sheetsUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(dataToSend)
                     });
 
                     // Quitar indicador de carga
