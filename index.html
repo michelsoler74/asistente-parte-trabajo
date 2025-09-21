@@ -799,6 +799,7 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
 
             // Exportar a PDF
             const exportToPDF = () => {
+                return new Promise((resolve) => {
                 const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
                 const fecha = new Date(formData.fecha);
                 const fechaFormateada = fecha.toLocaleDateString('es-ES', {
@@ -1119,7 +1120,11 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                 window.URL.revokeObjectURL(url);
                 document.body.removeChild(a);
 
-                alert('📄 PDF Profesional generado como HTML\n\n✅ Para convertir a PDF:\n1. Abre el archivo HTML descargado\n2. Ctrl+P (Imprimir)\n3. Selecciona "Guardar como PDF"\n4. ¡Listo! Tendrás un PDF profesional');
+                // Resolver la Promise después de la descarga
+                setTimeout(() => {
+                    resolve();
+                }, 100);
+                });
             };
 
             // Definir pasos
@@ -1202,24 +1207,51 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                                         <h4 className="font-medium text-gray-700">✅ Operarios registrados:</h4>
                                         {formData.operarios
                                             .filter(op => op.nombre.trim() && op.horas)
-                                            .map((operario, index) => (
-                                            <div key={index} className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                                                <span className="font-medium">
-                                                    👷‍♂️ {operario.nombre} - {operario.horas}h
-                                                </span>
-                                                <button
-                                                    onClick={() => {
-                                                        const realIndex = formData.operarios.findIndex(op =>
-                                                            op.nombre === operario.nombre && op.horas === operario.horas
-                                                        );
-                                                        removeOperario(realIndex);
-                                                    }}
-                                                    className="text-red-600 hover:text-red-800 px-2 py-1 rounded"
-                                                >
-                                                    ❌
-                                                </button>
-                                            </div>
-                                        ))}
+                                            .map((operario, displayIndex) => {
+                                                const realIndex = formData.operarios.findIndex((op, i) =>
+                                                    op.nombre === operario.nombre && op.horas === operario.horas && i >= displayIndex
+                                                );
+                                                return (
+                                                    <div key={displayIndex} className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                            <div>
+                                                                <label className="block text-xs font-medium mb-1">Nombre:</label>
+                                                                <div className="flex gap-2">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={operario.nombre}
+                                                                        onChange={(e) => updateOperario(realIndex, 'nombre', e.target.value)}
+                                                                        className="flex-1 p-2 bg-white border border-green-300 rounded focus:ring-2 focus:ring-green-500"
+                                                                    />
+                                                                    <VoiceButton fieldName={`operario-${realIndex}-nombre`} />
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-xs font-medium mb-1">Horas:</label>
+                                                                <div className="flex gap-2">
+                                                                    <input
+                                                                        type="number"
+                                                                        step="0.5"
+                                                                        min="0"
+                                                                        max="24"
+                                                                        value={operario.horas}
+                                                                        onChange={(e) => updateOperario(realIndex, 'horas', e.target.value)}
+                                                                        className="flex-1 p-2 bg-white border border-green-300 rounded focus:ring-2 focus:ring-green-500"
+                                                                    />
+                                                                    <VoiceButton fieldName={`operario-${realIndex}-horas`} />
+                                                                    <button
+                                                                        onClick={() => removeOperario(realIndex)}
+                                                                        className="text-red-600 hover:text-red-800 px-2 py-1 rounded"
+                                                                        title="Eliminar operario"
+                                                                    >
+                                                                        ❌
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                     </div>
                                 )}
 
@@ -1691,13 +1723,19 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                                         📄 Descargar PDF
                                     </button>
                                     <button
-                                        onClick={() => { saveToHistory(); shareToWhatsApp(); }}
+                                        onClick={async () => {
+                                            saveToHistory();
+                                            await sendByWhatsApp();
+                                        }}
                                         className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors duration-200 flex items-center justify-center gap-2"
                                     >
                                         📱 Enviar WhatsApp
                                     </button>
                                     <button
-                                        onClick={() => { saveToHistory(); sendParte('email'); }}
+                                        onClick={async () => {
+                                            saveToHistory();
+                                            await sendByEmail();
+                                        }}
                                         className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center justify-center gap-2"
                                     >
                                         📧 Enviar Email
