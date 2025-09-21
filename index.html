@@ -100,6 +100,7 @@
             const [isListening, setIsListening] = useState(false);
             const [currentField, setCurrentField] = useState('');
             const [maxPartesLimit, setMaxPartesLimit] = useState(50);
+            const [currentOperarioIndex, setCurrentOperarioIndex] = useState(0);
 
             const recognitionRef = useRef(null);
             const currentFieldRef = useRef('');
@@ -391,13 +392,17 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
             // Función para limpiar los últimos N partes del historial
             const cleanLastPartes = (count = 5) => {
                 try {
+                    console.log('🗑️ Intentando limpiar historial. Total partes:', partesHistory.length);
+
                     if (partesHistory.length === 0) {
-                        alert('ℹ️ No hay partes en el historial para eliminar');
+                        alert('ℹ️ No hay partes en el historial para eliminar\n\nPrimero crea y guarda algunos partes para poder gestionar el historial.');
                         return 0;
                     }
 
                     const totalPartes = partesHistory.length;
                     const partesToDelete = Math.min(count, totalPartes);
+
+                    console.log('📊 Total partes:', totalPartes, 'A eliminar:', partesToDelete);
 
                     if (partesToDelete === 0) {
                         alert('ℹ️ No hay partes para eliminar');
@@ -405,23 +410,25 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
                     }
 
                     // Confirmar antes de eliminar
-                    const confirmMessage = `⚠️ ¿Eliminar los últimos ${partesToDelete} parte(s) del historial?\n\nEsto liberará memoria del navegador.\n\nEsta acción no se puede deshacer.`;
+                    const confirmMessage = `⚠️ ¿Eliminar los últimos ${partesToDelete} parte(s) del historial?\n\nTotal actual: ${totalPartes} partes\nQuedarán: ${totalPartes - partesToDelete} partes\n\nEsto liberará memoria del navegador.\n\nEsta acción no se puede deshacer.`;
 
                     if (confirm(confirmMessage)) {
                         // Mantener solo los partes más antiguos (eliminar los últimos)
                         const remainingPartes = partesHistory.slice(0, totalPartes - partesToDelete);
 
+                        console.log('🔄 Actualizando historial. Antes:', partesHistory.length, 'Después:', remainingPartes.length);
+
                         setPartesHistory(remainingPartes);
                         localStorage.setItem('partes_diarios_history', JSON.stringify(remainingPartes));
 
-                        alert(`✅ Eliminados ${partesToDelete} parte(s) del historial\n\n💾 Memoria liberada: ~${(partesToDelete * 50).toFixed(0)}KB aproximadamente`);
+                        alert(`✅ Eliminados ${partesToDelete} parte(s) del historial\n\nAntes: ${totalPartes} partes\nAhora: ${remainingPartes.length} partes\n\n💾 Memoria liberada: ~${(partesToDelete * 50).toFixed(0)}KB aproximadamente`);
                         return partesToDelete;
                     }
 
                     return 0;
                 } catch (error) {
                     console.error('Error limpiando partes del historial:', error);
-                    alert('❌ Error al limpiar el historial');
+                    alert('❌ Error al limpiar el historial: ' + error.message);
                     return 0;
                 }
             };
@@ -497,6 +504,7 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
 
                 setFormData(newFormData);
                 setCurrentStep(0);
+                setCurrentOperarioIndex(0); // Resetear índice de operario
                 localStorage.removeItem('parte_diario_current');
             };
 
@@ -506,7 +514,7 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
             };
 
             const addOperario = () => {
-                const lastOperario = formData.operarios[formData.operarios.length - 1];
+                const lastOperario = formData.operarios[currentOperarioIndex];
 
                 // Validar que el operario actual esté completo
                 if (!lastOperario?.nombre.trim() || !lastOperario?.horas) {
@@ -514,11 +522,14 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
                     return;
                 }
 
-                // Agregar nuevo operario vacío y limpiar el formulario
+                // Agregar nuevo operario vacío
                 setFormData(prev => ({
                     ...prev,
                     operarios: [...prev.operarios, { nombre: '', horas: '' }]
                 }));
+
+                // Actualizar índice para el siguiente operario
+                setCurrentOperarioIndex(prev => prev + 1);
 
                 // Mostrar confirmación
                 alert(`✅ Operario "${lastOperario.nombre}" añadido correctamente`);
@@ -1162,12 +1173,19 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
 
                                 {/* Formulario para añadir nuevo operario */}
                                 {(() => {
-                                    const currentIndex = formData.operarios.length - 1;
-                                    const currentOperario = formData.operarios[currentIndex] || { nombre: '', horas: '' };
+                                    // Asegurar que existe el operario en el índice actual
+                                    if (!formData.operarios[currentOperarioIndex]) {
+                                        const newOperarios = [...formData.operarios];
+                                        newOperarios[currentOperarioIndex] = { nombre: '', horas: '' };
+                                        setFormData(prev => ({ ...prev, operarios: newOperarios }));
+                                        return null; // Re-render después de actualizar
+                                    }
+
+                                    const currentOperario = formData.operarios[currentOperarioIndex];
 
                                     return (
                                         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                                            <h4 className="font-medium mb-3">➕ Añadir nuevo operario</h4>
+                                            <h4 className="font-medium mb-3">➕ Añadir operario #{currentOperarioIndex + 1}</h4>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div>
                                                     <label className="block text-sm font-medium mb-1">Nombre</label>
@@ -1175,12 +1193,12 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                                                         <input
                                                             type="text"
                                                             value={currentOperario.nombre}
-                                                            onChange={(e) => updateOperario(currentIndex, 'nombre', e.target.value)}
+                                                            onChange={(e) => updateOperario(currentOperarioIndex, 'nombre', e.target.value)}
                                                             placeholder="Nombre del operario"
                                                             className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                                            data-voice-field={`operario-${currentIndex}-nombre`}
+                                                            data-voice-field={`operario-${currentOperarioIndex}-nombre`}
                                                         />
-                                                        <VoiceButton fieldName={`operario-${currentIndex}-nombre`} />
+                                                        <VoiceButton fieldName={`operario-${currentOperarioIndex}-nombre`} />
                                                     </div>
                                                 </div>
 
@@ -1193,12 +1211,12 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                                                             min="0"
                                                             max="24"
                                                             value={currentOperario.horas}
-                                                            onChange={(e) => updateOperario(currentIndex, 'horas', e.target.value)}
+                                                            onChange={(e) => updateOperario(currentOperarioIndex, 'horas', e.target.value)}
                                                             placeholder="8"
                                                             className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                                            data-voice-field={`operario-${currentIndex}-horas`}
+                                                            data-voice-field={`operario-${currentOperarioIndex}-horas`}
                                                         />
-                                                        <VoiceButton fieldName={`operario-${currentIndex}-horas`} />
+                                                        <VoiceButton fieldName={`operario-${currentOperarioIndex}-horas`} />
                                                     </div>
                                                 </div>
                                             </div>
