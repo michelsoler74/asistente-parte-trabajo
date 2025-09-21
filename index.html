@@ -618,13 +618,16 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
                 try {
                     if (fieldName === 'newOperario-nombre') {
                         console.log('📝 Procesando nuevo operario nombre:', fieldName);
-                        const currentValue = formData.newOperario?.nombre || '';
-                        const newValue = currentValue ? currentValue + ' ' + transcript : transcript;
-                        console.log('📝 Actualizando newOperario nombre - currentValue:', currentValue, 'newValue:', newValue);
-                        setFormData(prev => ({
-                            ...prev,
-                            newOperario: { ...prev.newOperario, nombre: newValue }
-                        }));
+                        // Usar setFormData con callback para obtener el valor más actual
+                        setFormData(prev => {
+                            const currentValue = prev.newOperario?.nombre || '';
+                            const newValue = currentValue ? currentValue + ' ' + transcript : transcript;
+                            console.log('📝 Actualizando newOperario nombre - currentValue:', currentValue, 'newValue:', newValue);
+                            return {
+                                ...prev,
+                                newOperario: { ...prev.newOperario, nombre: newValue }
+                            };
+                        });
                         console.log('✅ NewOperario nombre actualizado');
                     } else if (fieldName.includes('operario-')) {
                         console.log('📝 Procesando campo de operario:', fieldName);
@@ -632,21 +635,33 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
                         const operarioIndex = parseInt(index);
                         console.log('📝 operarioIndex:', operarioIndex, 'field:', field);
 
-                        if (formData.operarios[operarioIndex]) {
-                            const currentValue = formData.operarios[operarioIndex][field] || '';
-                            const newValue = currentValue ? currentValue + ' ' + transcript : transcript;
-                            console.log('📝 Actualizando operario - currentValue:', currentValue, 'newValue:', newValue);
-                            updateOperario(operarioIndex, field, newValue);
-                            console.log('✅ Operario actualizado');
-                        } else {
-                            console.log('❌ Operario no encontrado en index:', operarioIndex);
-                        }
+                        // Usar setFormData con callback para obtener el valor más actual
+                        setFormData(prev => {
+                            if (prev.operarios[operarioIndex]) {
+                                const currentValue = prev.operarios[operarioIndex][field] || '';
+                                const newValue = currentValue ? currentValue + ' ' + transcript : transcript;
+                                console.log('📝 Actualizando operario - currentValue:', currentValue, 'newValue:', newValue);
+
+                                const updatedOperarios = prev.operarios.map((op, i) =>
+                                    i === operarioIndex ? { ...op, [field]: newValue } : op
+                                );
+
+                                return { ...prev, operarios: updatedOperarios };
+                            } else {
+                                console.log('❌ Operario no encontrado en index:', operarioIndex);
+                                return prev;
+                            }
+                        });
+                        console.log('✅ Operario actualizado');
                     } else {
                         console.log('📝 Procesando campo normal:', fieldName);
-                        const currentValue = formData[fieldName] || '';
-                        const newValue = currentValue ? currentValue + ' ' + transcript : transcript;
-                        console.log('📝 Actualizando campo - currentValue:', currentValue, 'newValue:', newValue);
-                        handleInputChange(fieldName, newValue);
+                        // Usar setFormData con callback para obtener el valor más actual
+                        setFormData(prev => {
+                            const currentValue = prev[fieldName] || '';
+                            const newValue = currentValue ? currentValue + ' ' + transcript : transcript;
+                            console.log('📝 Actualizando campo - currentValue:', currentValue, 'newValue:', newValue);
+                            return { ...prev, [fieldName]: newValue };
+                        });
                         console.log('✅ Campo actualizado');
                     }
                 } catch (error) {
