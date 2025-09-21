@@ -134,14 +134,18 @@
                     recognitionRef.current.lang = 'es-ES';
                     console.log('✅ Configuración de voz completada');
 
+                    // Variable para acumular todo el texto del dictado
+                    let fullTranscript = '';
+
                     recognitionRef.current.onresult = (event) => {
                         console.log('🎤 onresult disparado, event:', event);
                         console.log('🎤 resultIndex:', event.resultIndex, 'results.length:', event.results.length);
 
+                        // Reconstruir todo el transcript desde el principio
                         let finalTranscript = '';
                         let interimTranscript = '';
 
-                        for (let i = event.resultIndex; i < event.results.length; i++) {
+                        for (let i = 0; i < event.results.length; i++) {
                             const transcript = event.results[i][0].transcript;
                             console.log(`🎤 Result ${i}: "${transcript}", isFinal:`, event.results[i].isFinal);
 
@@ -152,24 +156,20 @@
                             }
                         }
 
+                        // Solo actualizar fullTranscript cuando hay contenido final nuevo
+                        if (finalTranscript && finalTranscript !== fullTranscript) {
+                            fullTranscript = finalTranscript;
+                            console.log('🎤 fullTranscript actualizado:', fullTranscript);
+                        }
+
                         console.log('🎤 finalTranscript:', finalTranscript);
                         console.log('🎤 interimTranscript:', interimTranscript);
                         console.log('🎤 currentField (estado):', currentField);
                         console.log('🎤 currentFieldRef.current:', currentFieldRef.current);
 
-                        // Solo procesar resultados FINALES para evitar duplicación
-                        const fieldToUse = currentFieldRef.current || currentField;
-
-                        if (finalTranscript && finalTranscript.trim() && fieldToUse) {
-                            console.log('🎤 LLAMANDO handleVoiceInput con FINAL:', fieldToUse, finalTranscript.trim());
-                            handleVoiceInput(fieldToUse, finalTranscript.trim());
-                        } else if (finalTranscript) {
-                            console.log('❌ No se puede procesar FINAL - finalTranscript:', finalTranscript, 'fieldToUse:', fieldToUse);
-                        }
-
-                        // Los interim results solo se muestran visualmente pero no se guardan
-                        if (interimTranscript && fieldToUse) {
-                            console.log('🎤 Mostrando interim result (no guardado):', interimTranscript);
+                        // Solo mostrar visualmente, NO guardar hasta que termine
+                        if (interimTranscript) {
+                            console.log('🎤 Mostrando interim result (no guardado):', interTranscript);
                         }
                     };
 
@@ -178,6 +178,20 @@
                     };
 
                     recognitionRef.current.onend = () => {
+                        console.log('🎤 Reconocimiento terminado');
+
+                        // Procesar el texto final SOLO cuando termine
+                        const fieldToUse = currentFieldRef.current || currentField;
+
+                        if (fullTranscript && fullTranscript.trim() && fieldToUse) {
+                            console.log('🎤 PROCESANDO TEXTO FINAL:', fieldToUse, fullTranscript.trim());
+                            handleVoiceInput(fieldToUse, fullTranscript.trim());
+                        } else {
+                            console.log('❌ No hay texto final para procesar');
+                        }
+
+                        // Limpiar variables
+                        fullTranscript = '';
                         setIsListening(false);
                         setCurrentField('');
                         currentFieldRef.current = '';
@@ -185,6 +199,8 @@
 
                     recognitionRef.current.onerror = (event) => {
                         console.error('Error de reconocimiento de voz:', event.error);
+                        // Limpiar variables en caso de error
+                        fullTranscript = '';
                         setIsListening(false);
                         setCurrentField('');
                         currentFieldRef.current = '';
@@ -1185,21 +1201,21 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                             <div className="space-y-6">
                                 <div>
                                     <label className="block text-sm font-medium mb-2">¿Cuál es el nombre del trabajo o proyecto?</label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            value={formData.nombreTrabajo}
-                                            onChange={(e) => handleInputChange('nombreTrabajo', e.target.value)}
-                                            placeholder="Ej: Construcción casa unifamiliar, Reforma baño..."
-                                            className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                        />
+                                    <input
+                                        type="text"
+                                        value={formData.nombreTrabajo}
+                                        onChange={(e) => handleInputChange('nombreTrabajo', e.target.value)}
+                                        placeholder="Ej: Construcción casa unifamiliar, Reforma baño..."
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <div className="flex gap-2 mt-2">
                                         <VoiceButton fieldName="nombreTrabajo" />
                                         <button
                                             onClick={() => handleInputChange('nombreTrabajo', '')}
                                             className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                                             title="Borrar contenido"
                                         >
-                                            🗑️
+                                            🗑️ Borrar
                                         </button>
                                     </div>
                                 </div>
@@ -1254,17 +1270,17 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-sm font-medium mb-1">Nombre</label>
-                                            <div className="flex gap-2">
-                                                <input
-                                                    type="text"
-                                                    value={formData.newOperario?.nombre || ''}
-                                                    onChange={(e) => setFormData(prev => ({
-                                                        ...prev,
-                                                        newOperario: { ...prev.newOperario, nombre: e.target.value }
-                                                    }))}
-                                                    placeholder="Nombre del operario"
-                                                    className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                                />
+                                            <input
+                                                type="text"
+                                                value={formData.newOperario?.nombre || ''}
+                                                onChange={(e) => setFormData(prev => ({
+                                                    ...prev,
+                                                    newOperario: { ...prev.newOperario, nombre: e.target.value }
+                                                }))}
+                                                placeholder="Nombre del operario"
+                                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <div className="flex gap-2 mt-2">
                                                 <VoiceButton fieldName="newOperario-nombre" />
                                                 <button
                                                     onClick={() => setFormData(prev => ({
@@ -1274,7 +1290,7 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                                                     className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                                                     title="Borrar nombre"
                                                 >
-                                                    🗑️
+                                                    🗑️ Borrar
                                                 </button>
                                             </div>
                                         </div>
@@ -1336,23 +1352,23 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                             <div className="space-y-6">
                                 <div>
                                     <label className="block text-sm font-medium mb-2">Describe detalladamente los trabajos realizados hoy</label>
-                                    <div className="flex gap-2">
-                                        <textarea
-                                            value={formData.trabajosRealizados}
-                                            onChange={(e) => handleInputChange('trabajosRealizados', e.target.value)}
-                                            placeholder="Describe qué trabajos específicos se han realizado hoy..."
-                                            rows="6"
-                                            className={`flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                                                isListening && currentField === 'trabajosRealizados' ? 'voice-active' : ''
-                                            }`}
-                                        />
+                                    <textarea
+                                        value={formData.trabajosRealizados}
+                                        onChange={(e) => handleInputChange('trabajosRealizados', e.target.value)}
+                                        placeholder="Describe qué trabajos específicos se han realizado hoy..."
+                                        rows="6"
+                                        className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                                            isListening && currentField === 'trabajosRealizados' ? 'voice-active' : ''
+                                        }`}
+                                    />
+                                    <div className="flex gap-2 mt-2">
                                         <VoiceButton fieldName="trabajosRealizados" />
                                         <button
                                             onClick={() => handleInputChange('trabajosRealizados', '')}
                                             className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                                             title="Borrar contenido"
                                         >
-                                            🗑️
+                                            🗑️ Borrar
                                         </button>
                                     </div>
 
@@ -1370,23 +1386,23 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                             <div className="space-y-6">
                                 <div>
                                     <label className="block text-sm font-medium mb-2">¿Qué materiales y herramientas se han utilizado?</label>
-                                    <div className="flex gap-2">
-                                        <textarea
-                                            value={formData.materialesUtilizados}
-                                            onChange={(e) => handleInputChange('materialesUtilizados', e.target.value)}
-                                            placeholder="Lista los materiales, herramientas y equipos utilizados..."
-                                            rows="5"
-                                            className={`flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                                                isListening && currentField === 'materialesUtilizados' ? 'voice-active' : ''
-                                            }`}
-                                        />
+                                    <textarea
+                                        value={formData.materialesUtilizados}
+                                        onChange={(e) => handleInputChange('materialesUtilizados', e.target.value)}
+                                        placeholder="Lista los materiales, herramientas y equipos utilizados..."
+                                        rows="5"
+                                        className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                                            isListening && currentField === 'materialesUtilizados' ? 'voice-active' : ''
+                                        }`}
+                                    />
+                                    <div className="flex gap-2 mt-2">
                                         <VoiceButton fieldName="materialesUtilizados" />
                                         <button
                                             onClick={() => handleInputChange('materialesUtilizados', '')}
                                             className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                                             title="Borrar contenido"
                                         >
-                                            🗑️
+                                            🗑️ Borrar
                                         </button>
                                     </div>
                                 </div>
@@ -1398,46 +1414,46 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                             <div className="space-y-6">
                                 <div>
                                     <label className="block text-sm font-medium mb-2">🚨 ¿Ha habido alguna incidencia o problema?</label>
-                                    <div className="flex gap-2">
-                                        <textarea
-                                            value={formData.incidencias}
-                                            onChange={(e) => handleInputChange('incidencias', e.target.value)}
-                                            placeholder="Describe cualquier problema, incidencia o situación especial..."
-                                            rows="4"
-                                            className={`flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                                                isListening && currentField === 'incidencias' ? 'voice-active' : ''
-                                            }`}
-                                        />
+                                    <textarea
+                                        value={formData.incidencias}
+                                        onChange={(e) => handleInputChange('incidencias', e.target.value)}
+                                        placeholder="Describe cualquier problema, incidencia o situación especial..."
+                                        rows="4"
+                                        className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                                            isListening && currentField === 'incidencias' ? 'voice-active' : ''
+                                        }`}
+                                    />
+                                    <div className="flex gap-2 mt-2">
                                         <VoiceButton fieldName="incidencias" />
                                         <button
                                             onClick={() => handleInputChange('incidencias', '')}
                                             className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                                             title="Borrar contenido"
                                         >
-                                            🗑️
+                                            🗑️ Borrar
                                         </button>
                                     </div>
                                 </div>
 
                                 <div>
                                     <label className="block text-sm font-medium mb-2">💡 Observaciones adicionales</label>
-                                    <div className="flex gap-2">
-                                        <textarea
-                                            value={formData.observaciones}
-                                            onChange={(e) => handleInputChange('observaciones', e.target.value)}
-                                            placeholder="Cualquier observación, comentario o nota adicional..."
-                                            rows="4"
-                                            className={`flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                                                isListening && currentField === 'observaciones' ? 'voice-active' : ''
-                                            }`}
-                                        />
+                                    <textarea
+                                        value={formData.observaciones}
+                                        onChange={(e) => handleInputChange('observaciones', e.target.value)}
+                                        placeholder="Cualquier observación, comentario o nota adicional..."
+                                        rows="4"
+                                        className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                                            isListening && currentField === 'observaciones' ? 'voice-active' : ''
+                                        }`}
+                                    />
+                                    <div className="flex gap-2 mt-2">
                                         <VoiceButton fieldName="observaciones" />
                                         <button
                                             onClick={() => handleInputChange('observaciones', '')}
                                             className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                                             title="Borrar contenido"
                                         >
-                                            🗑️
+                                            🗑️ Borrar
                                         </button>
                                     </div>
                                 </div>
@@ -1449,23 +1465,23 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                             <div className="space-y-6">
                                 <div>
                                     <label className="block text-sm font-medium mb-2">📋 ¿Qué queda pendiente para mañana o próximos días?</label>
-                                    <div className="flex gap-2">
-                                        <textarea
-                                            value={formData.tareasPendientes}
-                                            onChange={(e) => handleInputChange('tareasPendientes', e.target.value)}
-                                            placeholder="Lista las tareas que quedan pendientes, materiales que faltan, etc..."
-                                            rows="5"
-                                            className={`flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                                                isListening && currentField === 'tareasPendientes' ? 'voice-active' : ''
-                                            }`}
-                                        />
+                                    <textarea
+                                        value={formData.tareasPendientes}
+                                        onChange={(e) => handleInputChange('tareasPendientes', e.target.value)}
+                                        placeholder="Lista las tareas que quedan pendientes, materiales que faltan, etc..."
+                                        rows="5"
+                                        className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                                            isListening && currentField === 'tareasPendientes' ? 'voice-active' : ''
+                                        }`}
+                                    />
+                                    <div className="flex gap-2 mt-2">
                                         <VoiceButton fieldName="tareasPendientes" />
                                         <button
                                             onClick={() => handleInputChange('tareasPendientes', '')}
                                             className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                                             title="Borrar contenido"
                                         >
-                                            🗑️
+                                            🗑️ Borrar
                                         </button>
                                     </div>
                                 </div>
