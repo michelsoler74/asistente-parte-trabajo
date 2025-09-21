@@ -1565,28 +1565,43 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
 
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <button
-                                        onClick={exportToPDF}
+                                        onClick={() => { saveToHistory(); exportToPDF(); }}
                                         className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center justify-center gap-2"
                                     >
                                         📄 Descargar PDF
                                     </button>
                                     <button
-                                        onClick={shareToWhatsApp}
+                                        onClick={() => { saveToHistory(); shareToWhatsApp(); }}
                                         className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors duration-200 flex items-center justify-center gap-2"
                                     >
                                         📱 Enviar WhatsApp
                                     </button>
                                     <button
-                                        onClick={() => sendParte('email')}
+                                        onClick={() => { saveToHistory(); sendParte('email'); }}
                                         className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center justify-center gap-2"
                                     >
                                         📧 Enviar Email
                                     </button>
                                 </div>
 
+                                {/* Botón de limpiar parte */}
+                                <div className="mt-4 text-center">
+                                    <button
+                                        onClick={() => {
+                                            if (confirm('⚠️ ¿Estás seguro de limpiar el parte actual?\n\nSe perderán todos los datos no guardados.')) {
+                                                createNewParte();
+                                                alert('🧹 Parte limpiado. Listo para empezar uno nuevo.');
+                                            }
+                                        }}
+                                        className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors duration-200 flex items-center justify-center gap-2 mx-auto"
+                                    >
+                                        🧹 Limpiar Parte
+                                    </button>
+                                </div>
+
                                 <div className="bg-yellow-50 p-3 rounded-lg">
                                     <p className="text-sm text-yellow-700">
-                                        💡 <strong>Opciones de envío:</strong> WhatsApp para comunicación rápida, PDF para documentos oficiales, y Email para envío formal.
+                                        💡 <strong>Opciones de envío:</strong> WhatsApp para comunicación rápida, PDF para documentos oficiales, y Email para envío formal. Todos guardan automáticamente en el historial.
                                     </p>
                                 </div>
                             </div>
@@ -1631,6 +1646,17 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                                     className="px-3 py-2 sm:py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm"
                                 >
                                     ➕ Nuevo Parte
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (confirm('⚠️ ¿Estás seguro de limpiar el parte actual?\n\nSe perderán todos los datos no guardados.')) {
+                                            createNewParte();
+                                            alert('🧹 Parte limpiado. Listo para empezar uno nuevo.');
+                                        }
+                                    }}
+                                    className="px-3 py-2 sm:py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
+                                >
+                                    🧹 Limpiar
                                 </button>
                             </div>
                         </div>
