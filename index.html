@@ -102,6 +102,7 @@
             const [currentField, setCurrentField] = useState('');
             const [maxPartesLimit, setMaxPartesLimit] = useState(50);
             const [currentOperarioIndex, setCurrentOperarioIndex] = useState(0);
+            const [currentTranscript, setCurrentTranscript] = useState('');
 
             const recognitionRef = useRef(null);
             const currentFieldRef = useRef('');
@@ -134,14 +135,11 @@
                     recognitionRef.current.lang = 'es-ES';
                     console.log('✅ Configuración de voz completada');
 
-                    // Variable para acumular todo el texto del dictado
-                    let fullTranscript = '';
-
                     recognitionRef.current.onresult = (event) => {
                         console.log('🎤 onresult disparado, event:', event);
                         console.log('🎤 resultIndex:', event.resultIndex, 'results.length:', event.results.length);
 
-                        // Reconstruir todo el transcript desde el principio
+                        // Reconstruir todo el transcript desde el principio para ESTA sesión
                         let finalTranscript = '';
                         let interimTranscript = '';
 
@@ -156,10 +154,10 @@
                             }
                         }
 
-                        // Solo actualizar fullTranscript cuando hay contenido final nuevo
-                        if (finalTranscript && finalTranscript !== fullTranscript) {
-                            fullTranscript = finalTranscript;
-                            console.log('🎤 fullTranscript actualizado:', fullTranscript);
+                        // Actualizar el transcript actual de esta sesión
+                        if (finalTranscript) {
+                            setCurrentTranscript(finalTranscript);
+                            console.log('🎤 currentTranscript actualizado:', finalTranscript);
                         }
 
                         console.log('🎤 finalTranscript:', finalTranscript);
@@ -169,7 +167,7 @@
 
                         // Solo mostrar visualmente, NO guardar hasta que termine
                         if (interimTranscript) {
-                            console.log('🎤 Mostrando interim result (no guardado):', interTranscript);
+                            console.log('🎤 Mostrando interim result (no guardado):', interimTranscript);
                         }
                     };
 
@@ -183,15 +181,15 @@
                         // Procesar el texto final SOLO cuando termine
                         const fieldToUse = currentFieldRef.current || currentField;
 
-                        if (fullTranscript && fullTranscript.trim() && fieldToUse) {
-                            console.log('🎤 PROCESANDO TEXTO FINAL:', fieldToUse, fullTranscript.trim());
-                            handleVoiceInput(fieldToUse, fullTranscript.trim());
+                        if (currentTranscript && currentTranscript.trim() && fieldToUse) {
+                            console.log('🎤 PROCESANDO TEXTO FINAL:', fieldToUse, currentTranscript.trim());
+                            handleVoiceInput(fieldToUse, currentTranscript.trim());
                         } else {
                             console.log('❌ No hay texto final para procesar');
                         }
 
                         // Limpiar variables
-                        fullTranscript = '';
+                        setCurrentTranscript('');
                         setIsListening(false);
                         setCurrentField('');
                         currentFieldRef.current = '';
@@ -200,7 +198,7 @@
                     recognitionRef.current.onerror = (event) => {
                         console.error('Error de reconocimiento de voz:', event.error);
                         // Limpiar variables en caso de error
-                        fullTranscript = '';
+                        setCurrentTranscript('');
                         setIsListening(false);
                         setCurrentField('');
                         currentFieldRef.current = '';
@@ -594,6 +592,7 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
                 setIsListening(true);
                 setCurrentField(fieldName);
                 currentFieldRef.current = fieldName;
+                setCurrentTranscript(''); // Limpiar transcript de sesión anterior
                 console.log('🎤 Estados configurados - isListening: true, currentField:', fieldName);
 
                 // Esperar un momento antes de iniciar
