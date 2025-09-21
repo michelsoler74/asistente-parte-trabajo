@@ -135,6 +135,9 @@
                     recognitionRef.current.lang = 'es-ES';
                     console.log('✅ Configuración de voz completada');
 
+                    // Variable para acumular transcript en esta sesión específica
+                    let sessionTranscript = '';
+
                     recognitionRef.current.onresult = (event) => {
                         console.log('🎤 onresult disparado, event:', event);
                         console.log('🎤 resultIndex:', event.resultIndex, 'results.length:', event.results.length);
@@ -154,10 +157,10 @@
                             }
                         }
 
-                        // Actualizar el transcript actual de esta sesión
+                        // Actualizar sessionTranscript local
                         if (finalTranscript) {
-                            setCurrentTranscript(finalTranscript);
-                            console.log('🎤 currentTranscript actualizado:', finalTranscript);
+                            sessionTranscript = finalTranscript;
+                            console.log('🎤 sessionTranscript actualizado:', sessionTranscript);
                         }
 
                         console.log('🎤 finalTranscript:', finalTranscript);
@@ -181,14 +184,15 @@
                         // Procesar el texto final SOLO cuando termine
                         const fieldToUse = currentFieldRef.current || currentField;
 
-                        if (currentTranscript && currentTranscript.trim() && fieldToUse) {
-                            console.log('🎤 PROCESANDO TEXTO FINAL:', fieldToUse, currentTranscript.trim());
-                            handleVoiceInput(fieldToUse, currentTranscript.trim());
+                        if (sessionTranscript && sessionTranscript.trim() && fieldToUse) {
+                            console.log('🎤 PROCESANDO TEXTO FINAL:', fieldToUse, sessionTranscript.trim());
+                            handleVoiceInput(fieldToUse, sessionTranscript.trim());
                         } else {
                             console.log('❌ No hay texto final para procesar');
                         }
 
                         // Limpiar variables
+                        sessionTranscript = '';
                         setCurrentTranscript('');
                         setIsListening(false);
                         setCurrentField('');
@@ -198,6 +202,7 @@
                     recognitionRef.current.onerror = (event) => {
                         console.error('Error de reconocimiento de voz:', event.error);
                         // Limpiar variables en caso de error
+                        sessionTranscript = '';
                         setCurrentTranscript('');
                         setIsListening(false);
                         setCurrentField('');
@@ -592,7 +597,6 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
                 setIsListening(true);
                 setCurrentField(fieldName);
                 currentFieldRef.current = fieldName;
-                setCurrentTranscript(''); // Limpiar transcript de sesión anterior
                 console.log('🎤 Estados configurados - isListening: true, currentField:', fieldName);
 
                 // Esperar un momento antes de iniciar
