@@ -1194,6 +1194,13 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                                             className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                                         />
                                         <VoiceButton fieldName="nombreTrabajo" />
+                                        <button
+                                            onClick={() => handleInputChange('nombreTrabajo', '')}
+                                            className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                            title="Borrar contenido"
+                                        >
+                                            🗑️
+                                        </button>
                                     </div>
                                 </div>
 
@@ -1259,6 +1266,16 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                                                     className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                                                 />
                                                 <VoiceButton fieldName="newOperario-nombre" />
+                                                <button
+                                                    onClick={() => setFormData(prev => ({
+                                                        ...prev,
+                                                        newOperario: { ...prev.newOperario, nombre: '' }
+                                                    }))}
+                                                    className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                                    title="Borrar nombre"
+                                                >
+                                                    🗑️
+                                                </button>
                                             </div>
                                         </div>
 
@@ -1330,6 +1347,13 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                                             }`}
                                         />
                                         <VoiceButton fieldName="trabajosRealizados" />
+                                        <button
+                                            onClick={() => handleInputChange('trabajosRealizados', '')}
+                                            className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                            title="Borrar contenido"
+                                        >
+                                            🗑️
+                                        </button>
                                     </div>
 
                                     {isListening && currentField === 'trabajosRealizados' && (
@@ -1357,6 +1381,13 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                                             }`}
                                         />
                                         <VoiceButton fieldName="materialesUtilizados" />
+                                        <button
+                                            onClick={() => handleInputChange('materialesUtilizados', '')}
+                                            className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                            title="Borrar contenido"
+                                        >
+                                            🗑️
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -1378,6 +1409,13 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                                             }`}
                                         />
                                         <VoiceButton fieldName="incidencias" />
+                                        <button
+                                            onClick={() => handleInputChange('incidencias', '')}
+                                            className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                            title="Borrar contenido"
+                                        >
+                                            🗑️
+                                        </button>
                                     </div>
                                 </div>
 
@@ -1394,6 +1432,13 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                                             }`}
                                         />
                                         <VoiceButton fieldName="observaciones" />
+                                        <button
+                                            onClick={() => handleInputChange('observaciones', '')}
+                                            className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                            title="Borrar contenido"
+                                        >
+                                            🗑️
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -1415,6 +1460,13 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                                             }`}
                                         />
                                         <VoiceButton fieldName="tareasPendientes" />
+                                        <button
+                                            onClick={() => handleInputChange('tareasPendientes', '')}
+                                            className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                            title="Borrar contenido"
+                                        >
+                                            🗑️
+                                        </button>
                                     </div>
                                 </div>
                             </div>
