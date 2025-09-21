@@ -624,6 +624,66 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
                 }
             };
 
+            // Compartir por WhatsApp
+            const shareToWhatsApp = async () => {
+                const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
+
+                // Crear resumen para WhatsApp
+                const resumenWhatsApp = `
+📋 *PARTE DIARIO DE TRABAJO*
+
+🏗️ *Proyecto:* ${formData.nombreTrabajo}
+📅 *Fecha:* ${formData.fecha}
+⏰ *Total Horas:* ${totalHoras}h
+👷‍♂️ *Operarios:* ${formData.operarios.length}
+
+*👥 PERSONAL:*
+${formData.operarios.map((op, i) => `${i+1}. ${op.nombre}: ${op.horas}h`).join('\n')}
+
+*🔧 TRABAJOS REALIZADOS:*
+${formData.trabajosRealizados}
+
+*📦 MATERIALES:*
+${formData.materialesUtilizados}
+
+${formData.incidencias ? `*⚠️ INCIDENCIAS:*\n${formData.incidencias}\n` : ''}
+
+${formData.observaciones ? `*📝 OBSERVACIONES:*\n${formData.observaciones}\n` : ''}
+
+${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendientes}\n` : ''}
+
+📷 *Imágenes adjuntas:* ${formData.imagenes.length}
+📄 *Albaranes:* ${formData.albaranes.length}
+                `.trim();
+
+                try {
+                    // Intentar usar Web Share API primero
+                    if (navigator.share) {
+                        await navigator.share({
+                            title: `Parte Diario - ${formData.nombreTrabajo}`,
+                            text: resumenWhatsApp,
+                        });
+                        return;
+                    }
+
+                    // Fallback: Abrir WhatsApp Web
+                    const encodedText = encodeURIComponent(resumenWhatsApp);
+                    const whatsappUrl = `https://wa.me/?text=${encodedText}`;
+                    window.open(whatsappUrl, '_blank');
+
+                } catch (error) {
+                    console.log('Error compartiendo:', error);
+                    // Fallback final: copiar al portapapeles
+                    if (navigator.clipboard) {
+                        await navigator.clipboard.writeText(resumenWhatsApp);
+                        alert('📋 Texto copiado al portapapeles\n\nPuedes pegarlo en WhatsApp o cualquier otra app');
+                    } else {
+                        // Mostrar el texto para copiar manualmente
+                        alert(`📱 Copia este texto para WhatsApp:\n\n${resumenWhatsApp}`);
+                    }
+                }
+            };
+
             // Exportar a PDF
             const exportToPDF = () => {
                 const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
@@ -1476,24 +1536,30 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col sm:flex-row gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <button
                                         onClick={exportToPDF}
-                                        className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center justify-center gap-2"
+                                        className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center justify-center gap-2"
                                     >
                                         📄 Descargar PDF
                                     </button>
                                     <button
-                                        onClick={sendParte}
-                                        className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center justify-center gap-2"
+                                        onClick={shareToWhatsApp}
+                                        className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors duration-200 flex items-center justify-center gap-2"
                                     >
-                                        {sendMethod === 'email' ? '📧 Enviar por Email' : '📱 Enviar por WhatsApp'}
+                                        📱 Enviar WhatsApp
+                                    </button>
+                                    <button
+                                        onClick={() => sendParte('email')}
+                                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center justify-center gap-2"
+                                    >
+                                        📧 Enviar Email
                                     </button>
                                 </div>
 
                                 <div className="bg-yellow-50 p-3 rounded-lg">
                                     <p className="text-sm text-yellow-700">
-                                        💡 <strong>Tip:</strong> Al enviar se creará automáticamente un nuevo parte y este se guardará en el historial.
+                                        💡 <strong>Opciones de envío:</strong> WhatsApp para comunicación rápida, PDF para documentos oficiales, y Email para envío formal.
                                     </p>
                                 </div>
                             </div>
