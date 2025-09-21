@@ -348,11 +348,21 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
             // Funciones de guardado y carga
             const loadSavedData = () => {
                 try {
-                    const saved = localStorage.getItem('parte_diario_current');
-                    if (saved) {
-                        const data = JSON.parse(saved);
-                        setFormData(data);
-                        setSaveStatus('loaded');
+                    // Solo cargar si no hay datos importantes en el formulario actual
+                    const hasImportantData = formData.nombreTrabajo ||
+                                           formData.trabajosRealizados ||
+                                           formData.operarios.length > 0 ||
+                                           formData.materialesUtilizados ||
+                                           formData.incidencias ||
+                                           formData.observaciones;
+
+                    if (!hasImportantData) {
+                        const saved = localStorage.getItem('parte_diario_current');
+                        if (saved) {
+                            const data = JSON.parse(saved);
+                            setFormData(data);
+                            setSaveStatus('loaded');
+                        }
                     }
 
                     let currentId = localStorage.getItem('parte_diario_current_id');
