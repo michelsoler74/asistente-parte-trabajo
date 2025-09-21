@@ -563,8 +563,25 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
                     return;
                 }
 
-                console.log('🎤 Detteniendo reconocimiento previo...');
-                // Detener cualquier reconocimiento previo
+                // Si ya está escuchando en el mismo campo, NO detener - continuar dictando
+                if (isListening && currentField === fieldName) {
+                    console.log('🎤 Continuando dictado en el mismo campo:', fieldName);
+
+                    // Solo reiniciar si el reconocimiento se ha detenido
+                    if (recognitionRef.current.state === 'inactive') {
+                        console.log('🔄 Reconocimiento inactivo, reiniciando...');
+                        try {
+                            recognitionRef.current.start();
+                            console.log('✅ Reconocimiento reiniciado para continuar');
+                        } catch (error) {
+                            console.error('❌ Error reiniciando reconocimiento:', error);
+                        }
+                    }
+                    return;
+                }
+
+                console.log('🎤 Deteniendo reconocimiento previo...');
+                // Detener cualquier reconocimiento previo solo si es diferente campo
                 try {
                     recognitionRef.current.stop();
                 } catch (e) {
@@ -576,7 +593,6 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
                 setCurrentField(fieldName);
                 currentFieldRef.current = fieldName;
                 console.log('🎤 Estados configurados - isListening: true, currentField:', fieldName);
-                console.log('🎤 currentFieldRef.current:', currentFieldRef.current);
 
                 // Esperar un momento antes de iniciar
                 setTimeout(() => {
@@ -646,18 +662,54 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
             const VoiceButton = ({ fieldName }) => {
                 const isActiveField = isListening && currentField === fieldName;
 
+                // Determinar el texto del botón basado en si hay contenido
+                const getButtonText = () => {
+                    if (isActiveField) {
+                        return '🔴 Parar';
+                    }
+
+                    // Verificar si el campo tiene contenido para mostrar "Continuar" vs "Dictar"
+                    let hasContent = false;
+                    if (fieldName.includes('operario-')) {
+                        const [, index, field] = fieldName.split('-');
+                        const operarioIndex = parseInt(index);
+                        hasContent = formData.operarios[operarioIndex]?.[field]?.trim().length > 0;
+                    } else {
+                        hasContent = formData[fieldName]?.trim().length > 0;
+                    }
+
+                    return hasContent ? '🎤 Continuar' : '🎤 Dictar';
+                };
+
+                const getTitle = () => {
+                    if (isActiveField) {
+                        return 'Parar dictado';
+                    }
+
+                    let hasContent = false;
+                    if (fieldName.includes('operario-')) {
+                        const [, index, field] = fieldName.split('-');
+                        const operarioIndex = parseInt(index);
+                        hasContent = formData.operarios[operarioIndex]?.[field]?.trim().length > 0;
+                    } else {
+                        hasContent = formData[fieldName]?.trim().length > 0;
+                    }
+
+                    return hasContent ? 'Continuar dictado (se añadirá al texto existente)' : 'Activar dictado por voz';
+                };
+
                 return (
                     <button
                         type="button"
                         onClick={() => isActiveField ? stopVoiceRecognition() : startVoiceRecognition(fieldName)}
                         className={`ml-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                             isActiveField
-                                ? 'bg-red-500 text-white shadow-lg'
+                                ? 'bg-red-500 text-white shadow-lg animate-pulse'
                                 : 'bg-blue-500 text-white hover:bg-blue-600'
                         }`}
-                        title={isActiveField ? 'Parar dictado' : 'Activar dictado por voz'}
+                        title={getTitle()}
                     >
-                        {isActiveField ? '🔴 Parar' : '🎤 Dictar'}
+                        {getButtonText()}
                     </button>
                 );
             };
