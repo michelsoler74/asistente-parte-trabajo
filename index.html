@@ -23,11 +23,35 @@
     <script>
         (function() {
             try {
-                // Track visit silently, no impact on app
-                fetch('https://api.countapi.xyz/hit/asistente-parte-trabajo/visits', {
-                    method: 'GET',
-                    mode: 'no-cors'
-                }).catch(() => {});
+                // Track visit using localStorage + timestamp
+                const visits = JSON.parse(localStorage.getItem('app_visits') || '[]');
+                visits.push(new Date().toISOString());
+
+                // Keep only last 100 visits
+                if (visits.length > 100) visits.splice(0, visits.length - 100);
+
+                localStorage.setItem('app_visits', JSON.stringify(visits));
+                console.log('📊 Total visits:', visits.length);
+
+                // Global function to check stats
+                window.getAppStats = () => {
+                    const allVisits = JSON.parse(localStorage.getItem('app_visits') || '[]');
+                    const today = new Date().toISOString().split('T')[0];
+                    const todayVisits = allVisits.filter(v => v.startsWith(today));
+
+                    console.log('📊 App Usage Stats:');
+                    console.log('Total visits:', allVisits.length);
+                    console.log('Today visits:', todayVisits.length);
+                    console.log('First visit:', allVisits[0] || 'None');
+                    console.log('Last visit:', allVisits[allVisits.length - 1] || 'None');
+
+                    return {
+                        total: allVisits.length,
+                        today: todayVisits.length,
+                        first: allVisits[0],
+                        last: allVisits[allVisits.length - 1]
+                    };
+                };
             } catch(e) {}
         })();
     </script>
