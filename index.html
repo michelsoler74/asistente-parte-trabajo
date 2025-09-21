@@ -388,6 +388,44 @@ ${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\
                 }
             };
 
+            // Función para limpiar los últimos N partes del historial
+            const cleanLastPartes = (count = 5) => {
+                try {
+                    if (partesHistory.length === 0) {
+                        alert('ℹ️ No hay partes en el historial para eliminar');
+                        return 0;
+                    }
+
+                    const totalPartes = partesHistory.length;
+                    const partesToDelete = Math.min(count, totalPartes);
+
+                    if (partesToDelete === 0) {
+                        alert('ℹ️ No hay partes para eliminar');
+                        return 0;
+                    }
+
+                    // Confirmar antes de eliminar
+                    const confirmMessage = `⚠️ ¿Eliminar los últimos ${partesToDelete} parte(s) del historial?\n\nEsto liberará memoria del navegador.\n\nEsta acción no se puede deshacer.`;
+
+                    if (confirm(confirmMessage)) {
+                        // Mantener solo los partes más antiguos (eliminar los últimos)
+                        const remainingPartes = partesHistory.slice(0, totalPartes - partesToDelete);
+
+                        setPartesHistory(remainingPartes);
+                        localStorage.setItem('partes_diarios_history', JSON.stringify(remainingPartes));
+
+                        alert(`✅ Eliminados ${partesToDelete} parte(s) del historial\n\n💾 Memoria liberada: ~${(partesToDelete * 50).toFixed(0)}KB aproximadamente`);
+                        return partesToDelete;
+                    }
+
+                    return 0;
+                } catch (error) {
+                    console.error('Error limpiando partes del historial:', error);
+                    alert('❌ Error al limpiar el historial');
+                    return 0;
+                }
+            };
+
             // Auto-save cada 2 segundos
             useEffect(() => {
                 const timeoutId = setTimeout(() => {
@@ -1660,15 +1698,10 @@ ${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendi
                                     ➕ Nuevo Parte
                                 </button>
                                 <button
-                                    onClick={() => {
-                                        if (confirm('⚠️ ¿Estás seguro de limpiar el parte actual?\n\nSe perderán todos los datos no guardados.')) {
-                                            createNewParte();
-                                            alert('🧹 Parte limpiado. Listo para empezar uno nuevo.');
-                                        }
-                                    }}
-                                    className="px-3 py-2 sm:py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
+                                    onClick={() => cleanLastPartes(5)}
+                                    className="px-3 py-2 sm:py-1 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 text-sm"
                                 >
-                                    🧹 Limpiar
+                                    🗑️ Limpiar Historial
                                 </button>
                             </div>
                         </div>
