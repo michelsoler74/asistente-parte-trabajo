@@ -19,6 +19,19 @@
     <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+    <!-- Simple usage tracking -->
+    <script>
+        (function() {
+            try {
+                // Track visit silently, no impact on app
+                fetch('https://api.countapi.xyz/hit/asistente-parte-trabajo/visits', {
+                    method: 'GET',
+                    mode: 'no-cors'
+                }).catch(() => {});
+            } catch(e) {}
+        })();
+    </script>
+
     <style>
         /* Mejoras para móvil */
         @media (max-width: 640px) {
