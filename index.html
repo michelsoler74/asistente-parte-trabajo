@@ -135,23 +135,36 @@
                     recognitionRef.current.lang = 'es-ES';
                     console.log('✅ Configuración de voz completada');
 
+                    let isProcessing = false;
+
                     recognitionRef.current.onresult = (event) => {
                         console.log('🎤 onresult disparado, event:', event);
 
-                        // Solo procesar resultados FINALES y solo los NUEVOS
-                        for (let i = event.resultIndex; i < event.results.length; i++) {
-                            if (event.results[i].isFinal) {
-                                const transcript = event.results[i][0].transcript.trim();
-                                console.log('🎤 Transcript FINAL detectado:', transcript);
+                        // Evitar procesamiento múltiple
+                        if (isProcessing) {
+                            console.log('🎤 Ya procesando, saltando...');
+                            return;
+                        }
 
-                                if (transcript) {
-                                    const fieldToUse = currentFieldRef.current || currentField;
-                                    if (fieldToUse) {
-                                        console.log('🎤 PROCESANDO INMEDIATAMENTE:', fieldToUse, transcript);
-                                        handleVoiceInput(fieldToUse, transcript);
-                                    }
+                        // Solo procesar el último resultado final
+                        const lastResult = event.results[event.results.length - 1];
+                        if (lastResult && lastResult.isFinal) {
+                            isProcessing = true;
+                            const transcript = lastResult[0].transcript.trim();
+                            console.log('🎤 Transcript FINAL detectado:', transcript);
+
+                            if (transcript) {
+                                const fieldToUse = currentFieldRef.current || currentField;
+                                if (fieldToUse) {
+                                    console.log('🎤 PROCESANDO:', fieldToUse, transcript);
+                                    handleVoiceInput(fieldToUse, transcript);
                                 }
                             }
+
+                            // Resetear flag después de un pequeño delay
+                            setTimeout(() => {
+                                isProcessing = false;
+                            }, 100);
                         }
                     };
 
