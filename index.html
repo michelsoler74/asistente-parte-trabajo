@@ -157,15 +157,19 @@
                         console.log('🎤 currentField (estado):', currentField);
                         console.log('🎤 currentFieldRef.current:', currentFieldRef.current);
 
-                        // Actualizar con cualquier transcripción disponible
-                        const textToProcess = finalTranscript || interimTranscript;
+                        // Solo procesar resultados FINALES para evitar duplicación
                         const fieldToUse = currentFieldRef.current || currentField;
 
-                        if (textToProcess && textToProcess.trim() && fieldToUse) {
-                            console.log('🎤 LLAMANDO handleVoiceInput con:', fieldToUse, textToProcess.trim());
-                            handleVoiceInput(fieldToUse, textToProcess.trim());
-                        } else {
-                            console.log('❌ No se puede procesar - textToProcess:', textToProcess, 'fieldToUse:', fieldToUse);
+                        if (finalTranscript && finalTranscript.trim() && fieldToUse) {
+                            console.log('🎤 LLAMANDO handleVoiceInput con FINAL:', fieldToUse, finalTranscript.trim());
+                            handleVoiceInput(fieldToUse, finalTranscript.trim());
+                        } else if (finalTranscript) {
+                            console.log('❌ No se puede procesar FINAL - finalTranscript:', finalTranscript, 'fieldToUse:', fieldToUse);
+                        }
+
+                        // Los interim results solo se muestran visualmente pero no se guardan
+                        if (interimTranscript && fieldToUse) {
+                            console.log('🎤 Mostrando interim result (no guardado):', interimTranscript);
                         }
                     };
 
