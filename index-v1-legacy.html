@@ -1,0 +1,2127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📱 Partes de Trabajo Móvil - Offline</title>
+    <meta name="description" content="App móvil offline para partes diarios de trabajo. Funciona sin internet, envío directo por WhatsApp o Email">
+    <meta name="keywords" content="parte diario, trabajo, dictado voz, construcción, mantenimiento, móvil, offline">
+    <meta name="author" content="Michel Soler">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📋</text></svg>">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React y Babel -->
+    <script crossorigin src="https://unpkg.com/react@17/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Simple usage tracking -->
+    <script>
+        (function() {
+            try {
+                // Track visit using localStorage + timestamp
+                const visits = JSON.parse(localStorage.getItem('app_visits') || '[]');
+                visits.push(new Date().toISOString());
+
+                // Keep only last 100 visits
+                if (visits.length > 100) visits.splice(0, visits.length - 100);
+
+                localStorage.setItem('app_visits', JSON.stringify(visits));
+                console.log('📊 Total visits:', visits.length);
+
+                // Global function to check stats
+                window.getAppStats = () => {
+                    const allVisits = JSON.parse(localStorage.getItem('app_visits') || '[]');
+                    const today = new Date().toISOString().split('T')[0];
+                    const todayVisits = allVisits.filter(v => v.startsWith(today));
+
+                    console.log('📊 App Usage Stats:');
+                    console.log('Total visits:', allVisits.length);
+                    console.log('Today visits:', todayVisits.length);
+                    console.log('First visit:', allVisits[0] || 'None');
+                    console.log('Last visit:', allVisits[allVisits.length - 1] || 'None');
+
+                    return {
+                        total: allVisits.length,
+                        today: todayVisits.length,
+                        first: allVisits[0],
+                        last: allVisits[allVisits.length - 1]
+                    };
+                };
+            } catch(e) {}
+        })();
+    </script>
+
+    <style>
+        /* Mejoras para móvil */
+        @media (max-width: 640px) {
+            /* Área táctil mejorada */
+            button {
+                min-height: 44px;
+                touch-action: manipulation;
+            }
+
+            /* Inputs optimizados para móvil */
+            input, textarea, select {
+                font-size: 16px; /* Evita zoom en iOS */
+                padding: 12px;
+            }
+        }
+
+        /* Estilos para dictado por voz */
+        .voice-active {
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+            border-color: #ef4444 !important;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+
+        /* Scrollbar personalizado */
+        .custom-scroll::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #a1a1a1;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const PartesDiarioApp = () => {
+            const [currentStep, setCurrentStep] = useState(0);
+            const [formData, setFormData] = useState({
+                fecha: new Date().toISOString().split('T')[0],
+                nombreTrabajo: '',
+                operarios: [],
+                newOperario: { nombre: '', horas: '' },
+                trabajosRealizados: '',
+                materialesUtilizados: '',
+                incidencias: '',
+                observaciones: '',
+                tareasPendientes: '',
+                imagenes: [],
+                albaranes: [],
+                resumenInteligente: ''
+            });
+
+            // Estados para configuración móvil
+            const [userEmail, setUserEmail] = useState('');
+            const [userWhatsApp, setUserWhatsApp] = useState('');
+            const [sendMethod, setSendMethod] = useState('email'); // 'email' o 'whatsapp'
+
+            // Estados de la UI
+            const [showSettings, setShowSettings] = useState(false);
+            const [showHistory, setShowHistory] = useState(false);
+            const [partesHistory, setPartesHistory] = useState([]);
+            const [saveStatus, setSaveStatus] = useState('');
+            const [isListening, setIsListening] = useState(false);
+            const [currentField, setCurrentField] = useState('');
+            const [maxPartesLimit, setMaxPartesLimit] = useState(50);
+            const [currentOperarioIndex, setCurrentOperarioIndex] = useState(0);
+            const [currentTranscript, setCurrentTranscript] = useState('');
+
+            const recognitionRef = useRef(null);
+            const currentFieldRef = useRef('');
+
+            // Cargar configuración al inicializar
+            useEffect(() => {
+                loadSavedData();
+                loadHistoryData();
+
+                const savedUserEmail = localStorage.getItem('user_email');
+                if (savedUserEmail) setUserEmail(savedUserEmail);
+
+                const savedUserWhatsApp = localStorage.getItem('user_whatsapp');
+                if (savedUserWhatsApp) setUserWhatsApp(savedUserWhatsApp);
+
+                const savedSendMethod = localStorage.getItem('send_method');
+                if (savedSendMethod) setSendMethod(savedSendMethod);
+
+                const savedLimit = localStorage.getItem('max_partes_limit');
+                if (savedLimit) setMaxPartesLimit(parseInt(savedLimit));
+
+                // Inicializar reconocimiento de voz
+                console.log('🔍 Verificando soporte de reconocimiento de voz...');
+                if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                    console.log('✅ Reconocimiento de voz soportado');
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    recognitionRef.current = new SpeechRecognition();
+                    recognitionRef.current.continuous = false;
+                    recognitionRef.current.interimResults = false;
+                    recognitionRef.current.lang = 'es-ES';
+                    console.log('✅ Configuración de voz completada');
+
+                    recognitionRef.current.onresult = (event) => {
+                        console.log('🎤 onresult disparado, event:', event);
+
+                        if (event.results && event.results.length > 0) {
+                            const transcript = event.results[0][0].transcript.trim();
+                            console.log('🎤 Transcript detectado:', transcript);
+
+                            if (transcript) {
+                                const fieldToUse = currentFieldRef.current || currentField;
+                                if (fieldToUse) {
+                                    console.log('🎤 PROCESANDO:', fieldToUse, transcript);
+                                    handleVoiceInput(fieldToUse, transcript);
+                                }
+                            }
+                        }
+                    };
+
+                    recognitionRef.current.onstart = () => {
+                        console.log('🎤 Reconocimiento iniciado correctamente');
+                    };
+
+                    recognitionRef.current.onend = () => {
+                        console.log('🎤 Reconocimiento terminado');
+
+                        // Solo limpiar variables - el texto ya se procesó en onresult
+                        setIsListening(false);
+                        setCurrentField('');
+                        currentFieldRef.current = '';
+                    };
+
+                    recognitionRef.current.onerror = (event) => {
+                        console.error('Error de reconocimiento de voz:', event.error);
+                        // Limpiar variables en caso de error
+                        setIsListening(false);
+                        setCurrentField('');
+                        currentFieldRef.current = '';
+                    };
+                } else {
+                    console.error('❌ Reconocimiento de voz NO soportado en este navegador');
+                    alert('❌ Tu navegador no soporta reconocimiento de voz\n\n✅ Navegadores compatibles:\n• Chrome\n• Edge\n• Safari (iOS)\n\n❌ No funciona en:\n• Firefox\n• Modo incógnito (algunas versiones)');
+                }
+
+                return () => {
+                    if (recognitionRef.current) {
+                        recognitionRef.current.stop();
+                    }
+                };
+            }, []);
+
+            // Función para guardar configuración móvil
+            const saveMobileConfig = (email, whatsapp, method) => {
+                setUserEmail(email);
+                setUserWhatsApp(whatsapp);
+                setSendMethod(method);
+                localStorage.setItem('user_email', email);
+                localStorage.setItem('user_whatsapp', whatsapp);
+                localStorage.setItem('send_method', method);
+            };
+
+            // Función para enviar por Email
+            const sendByEmail = async () => {
+                if (!userEmail.trim()) {
+                    alert('⚠️ Configura tu email primero en la sección de configuración');
+                    return false;
+                }
+
+                try {
+                    // Primero generar el PDF
+                    await exportToPDF();
+
+                    // Preparar resumen del parte
+                    const totalHoras = formData.operarios?.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0) || 0;
+                    const fechaFormateada = new Date(formData.fecha).toLocaleDateString('es-ES');
+
+                    const resumenEmail = `
+📋 PARTE DIARIO DE TRABAJO
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏗️ Proyecto: ${formData.nombreTrabajo}
+📅 Fecha: ${fechaFormateada}
+⏰ Total Horas: ${totalHoras}h
+👷 Operarios: ${formData.operarios?.length || 0}
+
+📝 TRABAJOS REALIZADOS:
+${formData.trabajosRealizados || 'Sin especificar'}
+
+📦 MATERIALES:
+${formData.materialesUtilizados || 'Sin especificar'}
+
+${formData.incidencias ? `⚠️ INCIDENCIAS:\n${formData.incidencias}\n` : ''}
+${formData.observaciones ? `💡 OBSERVACIONES:\n${formData.observaciones}\n` : ''}
+${formData.tareasPendientes ? `📋 TAREAS PENDIENTES:\n${formData.tareasPendientes}\n` : ''}
+
+📊 ARCHIVOS ADJUNTOS:
+📷 Imágenes: ${formData.imagenes?.length || 0}
+📄 Documentos: ${formData.albaranes?.length || 0}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+📱 Enviado desde App Móvil de Partes
+`;
+
+                    // Crear enlace mailto
+                    const subject = `Parte Diario - ${formData.nombreTrabajo} - ${fechaFormateada}`;
+                    const body = encodeURIComponent(resumenEmail);
+                    const mailtoLink = `mailto:${userEmail}?subject=${encodeURIComponent(subject)}&body=${body}`;
+
+                    // Abrir cliente de email
+                    window.open(mailtoLink, '_self');
+
+                    alert('📧 Email preparado\n\n✅ Se ha abierto tu cliente de email\n📄 No olvides adjuntar el archivo PDF descargado\n💾 El parte se ha guardado localmente');
+
+                    // Guardar en historial local
+                    saveToHistory();
+
+                    return true;
+
+                } catch (error) {
+                    console.error('Error enviando email:', error);
+                    alert('❌ Error preparando email\n\n' + error.message + '\n\nPero el parte se ha guardado localmente.');
+                    return false;
+                }
+            };
+
+            // Función para enviar por WhatsApp
+            const sendByWhatsApp = async () => {
+                if (!userWhatsApp.trim()) {
+                    alert('⚠️ Configura tu WhatsApp primero en la sección de configuración');
+                    return false;
+                }
+
+                try {
+                    // Primero generar el PDF
+                    await exportToPDF();
+
+                    // Preparar resumen del parte para WhatsApp (más conciso)
+                    const totalHoras = formData.operarios?.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0) || 0;
+                    const fechaFormateada = new Date(formData.fecha).toLocaleDateString('es-ES');
+
+                    const resumenWhatsApp = `🏗️ *PARTE DIARIO*
+
+📋 *${formData.nombreTrabajo}*
+📅 ${fechaFormateada} | ⏰ ${totalHoras}h | 👷 ${formData.operarios?.length || 0} operarios
+
+🔧 *Trabajos:*
+${formData.trabajosRealizados || 'Sin especificar'}
+
+📦 *Materiales:*
+${formData.materialesUtilizados || 'Sin especificar'}
+
+${formData.incidencias ? `⚠️ *Incidencias:*\n${formData.incidencias}\n` : ''}
+${formData.observaciones ? `💡 *Observaciones:*\n${formData.observaciones}\n` : ''}
+${formData.tareasPendientes ? `📋 *Pendientes:*\n${formData.tareasPendientes}\n` : ''}
+
+📊 Adjuntos: ${formData.imagenes?.length || 0} fotos, ${formData.albaranes?.length || 0} docs
+
+📄 *PDF descargado automáticamente para adjuntar*
+
+📱 _Enviado desde App Móvil_`;
+
+                    // Limpiar número de WhatsApp (quitar espacios, guiones, etc.)
+                    const cleanNumber = userWhatsApp.replace(/[^\d+]/g, '');
+
+                    // Crear enlace de WhatsApp
+                    const whatsappLink = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(resumenWhatsApp)}`;
+
+                    // Abrir WhatsApp
+                    window.open(whatsappLink, '_blank');
+
+                    alert('📱 WhatsApp abierto con envío completo\n\n✅ Se ha preparado el mensaje\n📄 El PDF se ha descargado automáticamente\n📎 Adjunta también el archivo PDF descargado\n💾 El parte se ha guardado localmente');
+
+                    // Guardar en historial local
+                    saveToHistory();
+
+                    return true;
+
+                } catch (error) {
+                    console.error('Error enviando WhatsApp:', error);
+                    alert('❌ Error preparando WhatsApp\n\n' + error.message + '\n\nPero el parte se ha guardado localmente.');
+                    return false;
+                }
+            };
+
+            // Función unificada de envío
+            const sendParte = async () => {
+                if (sendMethod === 'email') {
+                    return await sendByEmail();
+                } else if (sendMethod === 'whatsapp') {
+                    return await sendByWhatsApp();
+                } else {
+                    alert('⚠️ Selecciona un método de envío en la configuración');
+                    return false;
+                }
+            };
+
+            // Función para convertir archivos a base64
+            const convertToBase64 = (file) => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = error => reject(error);
+                });
+            };
+
+            // Funciones de guardado y carga
+            const loadSavedData = () => {
+                try {
+                    // Solo cargar si no hay datos importantes en el formulario actual
+                    const hasImportantData = formData.nombreTrabajo ||
+                                           formData.trabajosRealizados ||
+                                           formData.operarios.length > 0 ||
+                                           formData.materialesUtilizados ||
+                                           formData.incidencias ||
+                                           formData.observaciones;
+
+                    if (!hasImportantData) {
+                        const saved = localStorage.getItem('parte_diario_current');
+                        if (saved) {
+                            const data = JSON.parse(saved);
+                            setFormData(data);
+                            setSaveStatus('loaded');
+                        }
+                    }
+
+                    let currentId = localStorage.getItem('parte_diario_current_id');
+                    if (!currentId) {
+                        const newId = 'parte_' + Date.now();
+                        localStorage.setItem('parte_diario_current_id', newId);
+                    }
+                } catch (error) {
+                    console.error('Error cargando datos:', error);
+                    setSaveStatus('error');
+                }
+            };
+
+            const loadHistoryData = () => {
+                try {
+                    const history = localStorage.getItem('partes_diarios_history');
+                    if (history) {
+                        setPartesHistory(JSON.parse(history));
+                    }
+                } catch (error) {
+                    console.error('Error cargando historial:', error);
+                }
+            };
+
+            // Función para limpiar los últimos N partes del historial
+            const cleanLastPartes = (count = 5) => {
+                try {
+                    console.log('🗑️ Intentando limpiar historial. Total partes:', partesHistory.length);
+
+                    if (partesHistory.length === 0) {
+                        alert('ℹ️ No hay partes en el historial para eliminar\n\nPrimero crea y guarda algunos partes para poder gestionar el historial.');
+                        return 0;
+                    }
+
+                    const totalPartes = partesHistory.length;
+                    const partesToDelete = Math.min(count, totalPartes);
+
+                    console.log('📊 Total partes:', totalPartes, 'A eliminar:', partesToDelete);
+
+                    if (partesToDelete === 0) {
+                        alert('ℹ️ No hay partes para eliminar');
+                        return 0;
+                    }
+
+                    // Confirmar antes de eliminar
+                    const confirmMessage = `⚠️ ¿Eliminar los últimos ${partesToDelete} parte(s) del historial?\n\nTotal actual: ${totalPartes} partes\nQuedarán: ${totalPartes - partesToDelete} partes\n\nEsto liberará memoria del navegador.\n\nEsta acción no se puede deshacer.`;
+
+                    if (confirm(confirmMessage)) {
+                        // Mantener solo los partes más antiguos (eliminar los últimos)
+                        const remainingPartes = partesHistory.slice(0, totalPartes - partesToDelete);
+
+                        console.log('🔄 Actualizando historial. Antes:', partesHistory.length, 'Después:', remainingPartes.length);
+
+                        setPartesHistory(remainingPartes);
+                        localStorage.setItem('partes_diarios_history', JSON.stringify(remainingPartes));
+
+                        alert(`✅ Eliminados ${partesToDelete} parte(s) del historial\n\nAntes: ${totalPartes} partes\nAhora: ${remainingPartes.length} partes\n\n💾 Memoria liberada: ~${(partesToDelete * 50).toFixed(0)}KB aproximadamente`);
+                        return partesToDelete;
+                    }
+
+                    return 0;
+                } catch (error) {
+                    console.error('Error limpiando partes del historial:', error);
+                    alert('❌ Error al limpiar el historial: ' + error.message);
+                    return 0;
+                }
+            };
+
+            // Auto-save cada 2 segundos
+            useEffect(() => {
+                const timeoutId = setTimeout(() => {
+                    try {
+                        setSaveStatus('saving');
+                        localStorage.setItem('parte_diario_current', JSON.stringify(formData));
+                        setSaveStatus('saved');
+                    } catch (error) {
+                        console.error('Error guardando:', error);
+                        setSaveStatus('error');
+                    }
+                }, 2000);
+
+                return () => clearTimeout(timeoutId);
+            }, [formData]);
+
+            // Funciones de historial
+            const saveToHistory = () => {
+                try {
+                    const currentId = localStorage.getItem('parte_diario_current_id') || 'parte_' + Date.now();
+                    const parteToSave = {
+                        id: currentId,
+                        ...formData,
+                        fechaCreacion: new Date().toISOString(),
+                        ultimaModificacion: new Date().toISOString(),
+                        completado: true
+                    };
+
+                    const updatedHistory = [...partesHistory];
+                    const existingIndex = updatedHistory.findIndex(p => p.id === currentId);
+
+                    if (existingIndex >= 0) {
+                        updatedHistory[existingIndex] = parteToSave;
+                    } else {
+                        updatedHistory.unshift(parteToSave);
+                    }
+
+                    // Mantener solo los últimos maxPartesLimit
+                    const limitedHistory = updatedHistory.slice(0, maxPartesLimit);
+
+                    setPartesHistory(limitedHistory);
+                    localStorage.setItem('partes_diarios_history', JSON.stringify(limitedHistory));
+
+                    return true;
+                } catch (error) {
+                    console.error('Error guardando en historial:', error);
+                    return false;
+                }
+            };
+
+            const createNewParte = () => {
+                const newId = 'parte_' + Date.now();
+                localStorage.setItem('parte_diario_current_id', newId);
+
+                const newFormData = {
+                    fecha: new Date().toISOString().split('T')[0],
+                    nombreTrabajo: '',
+                    operarios: [],
+                    newOperario: { nombre: '', horas: '' },
+                    trabajosRealizados: '',
+                    materialesUtilizados: '',
+                    incidencias: '',
+                    observaciones: '',
+                    tareasPendientes: '',
+                    imagenes: [],
+                    albaranes: [],
+                    resumenInteligente: ''
+                };
+
+                setFormData(newFormData);
+                setCurrentStep(0);
+                setCurrentOperarioIndex(0); // Resetear índice de operario
+                localStorage.removeItem('parte_diario_current');
+            };
+
+            // Funciones de UI
+            const handleInputChange = (field, value) => {
+                setFormData(prev => ({ ...prev, [field]: value }));
+            };
+
+            // Funciones de operarios simplificadas (ya no se usan múltiples)
+
+            const updateOperario = (index, field, value) => {
+                setFormData(prev => ({
+                    ...prev,
+                    operarios: prev.operarios.map((op, i) =>
+                        i === index ? { ...op, [field]: value } : op
+                    )
+                }));
+            };
+
+            const removeOperario = (index) => {
+                if (formData.operarios.length > 1) {
+                    setFormData(prev => ({
+                        ...prev,
+                        operarios: prev.operarios.filter((_, i) => i !== index)
+                    }));
+                }
+            };
+
+            // Funciones de voz
+            const startVoiceRecognition = (fieldName) => {
+                console.log('🎤 startVoiceRecognition llamado con fieldName:', fieldName);
+
+                if (!recognitionRef.current) {
+                    console.log('❌ recognitionRef.current es null');
+                    alert('Tu navegador no soporta reconocimiento de voz');
+                    return;
+                }
+
+                // Si ya está escuchando en el mismo campo, NO detener - continuar dictando
+                if (isListening && currentField === fieldName) {
+                    console.log('🎤 Continuando dictado en el mismo campo:', fieldName);
+
+                    // Solo reiniciar si el reconocimiento se ha detenido
+                    if (recognitionRef.current.state === 'inactive') {
+                        console.log('🔄 Reconocimiento inactivo, reiniciando...');
+                        try {
+                            recognitionRef.current.start();
+                            console.log('✅ Reconocimiento reiniciado para continuar');
+                        } catch (error) {
+                            console.error('❌ Error reiniciando reconocimiento:', error);
+                        }
+                    }
+                    return;
+                }
+
+                console.log('🎤 Deteniendo reconocimiento previo...');
+                // Detener cualquier reconocimiento previo solo si es diferente campo
+                try {
+                    recognitionRef.current.stop();
+                } catch (e) {
+                    console.log('🎤 No había reconocimiento corriendo');
+                }
+
+                console.log('🎤 Configurando estados...');
+                setIsListening(true);
+                setCurrentField(fieldName);
+                currentFieldRef.current = fieldName;
+                console.log('🎤 Estados configurados - isListening: true, currentField:', fieldName);
+
+                // Esperar un momento antes de iniciar
+                setTimeout(() => {
+                    console.log('🎤 Iniciando reconocimiento...');
+                    try {
+                        recognitionRef.current.start();
+                        console.log('✅ recognitionRef.current.start() ejecutado');
+                    } catch (error) {
+                        console.error('❌ Error al iniciar reconocimiento:', error);
+                        setIsListening(false);
+                        setCurrentField('');
+                    }
+                }, 100);
+            };
+
+            const stopVoiceRecognition = () => {
+                if (recognitionRef.current) {
+                    recognitionRef.current.stop();
+                    setIsListening(false);
+                    setCurrentField('');
+                }
+            };
+
+            const handleVoiceInput = (fieldName, transcript) => {
+                console.log('📝 INICIO handleVoiceInput - fieldName:', fieldName, 'transcript:', transcript);
+
+                if (!fieldName) {
+                    console.log('❌ fieldName está vacío!');
+                    return;
+                }
+
+                if (!transcript) {
+                    console.log('❌ transcript está vacío!');
+                    return;
+                }
+
+                try {
+                    if (fieldName === 'newOperario-nombre') {
+                        console.log('📝 Procesando nuevo operario nombre:', fieldName);
+                        // Usar setFormData con callback para obtener el valor más actual
+                        setFormData(prev => {
+                            const currentValue = prev.newOperario?.nombre || '';
+                            const newValue = currentValue ? currentValue + ' ' + transcript : transcript;
+                            console.log('📝 Actualizando newOperario nombre - currentValue:', currentValue, 'newValue:', newValue);
+                            return {
+                                ...prev,
+                                newOperario: { ...prev.newOperario, nombre: newValue }
+                            };
+                        });
+                        console.log('✅ NewOperario nombre actualizado');
+                    } else if (fieldName.includes('operario-')) {
+                        console.log('📝 Procesando campo de operario:', fieldName);
+                        const [, index, field] = fieldName.split('-');
+                        const operarioIndex = parseInt(index);
+                        console.log('📝 operarioIndex:', operarioIndex, 'field:', field);
+
+                        // Usar setFormData con callback para obtener el valor más actual
+                        setFormData(prev => {
+                            if (prev.operarios[operarioIndex]) {
+                                const currentValue = prev.operarios[operarioIndex][field] || '';
+                                const newValue = currentValue ? currentValue + ' ' + transcript : transcript;
+                                console.log('📝 Actualizando operario - currentValue:', currentValue, 'newValue:', newValue);
+
+                                const updatedOperarios = prev.operarios.map((op, i) =>
+                                    i === operarioIndex ? { ...op, [field]: newValue } : op
+                                );
+
+                                return { ...prev, operarios: updatedOperarios };
+                            } else {
+                                console.log('❌ Operario no encontrado en index:', operarioIndex);
+                                return prev;
+                            }
+                        });
+                        console.log('✅ Operario actualizado');
+                    } else {
+                        console.log('📝 Procesando campo normal:', fieldName);
+                        // Usar setFormData con callback para obtener el valor más actual
+                        setFormData(prev => {
+                            const currentValue = prev[fieldName] || '';
+                            const newValue = currentValue ? currentValue + ' ' + transcript : transcript;
+                            console.log('📝 Actualizando campo - currentValue:', currentValue, 'newValue:', newValue);
+                            return { ...prev, [fieldName]: newValue };
+                        });
+                        console.log('✅ Campo actualizado');
+                    }
+                } catch (error) {
+                    console.error('❌ ERROR en handleVoiceInput:', error);
+                }
+            };
+
+            // Componente de botón de voz
+            const VoiceButton = ({ fieldName }) => {
+                const isActiveField = isListening && currentField === fieldName;
+
+                // Determinar el texto del botón basado en si hay contenido
+                const getButtonText = () => {
+                    if (isActiveField) {
+                        return '🔴 Parar';
+                    }
+
+                    // Verificar si el campo tiene contenido para mostrar "Continuar" vs "Dictar"
+                    let hasContent = false;
+                    if (fieldName === 'newOperario-nombre') {
+                        hasContent = formData.newOperario?.nombre?.trim().length > 0;
+                    } else if (fieldName.includes('operario-')) {
+                        const [, index, field] = fieldName.split('-');
+                        const operarioIndex = parseInt(index);
+                        hasContent = formData.operarios[operarioIndex]?.[field]?.trim().length > 0;
+                    } else {
+                        hasContent = formData[fieldName]?.trim().length > 0;
+                    }
+
+                    return hasContent ? '🎤 Continuar' : '🎤 Dictar';
+                };
+
+                const getTitle = () => {
+                    if (isActiveField) {
+                        return 'Parar dictado';
+                    }
+
+                    let hasContent = false;
+                    if (fieldName.includes('operario-')) {
+                        const [, index, field] = fieldName.split('-');
+                        const operarioIndex = parseInt(index);
+                        hasContent = formData.operarios[operarioIndex]?.[field]?.trim().length > 0;
+                    } else {
+                        hasContent = formData[fieldName]?.trim().length > 0;
+                    }
+
+                    return hasContent ? 'Continuar dictado (se añadirá al texto existente)' : 'Activar dictado por voz';
+                };
+
+                return (
+                    <button
+                        type="button"
+                        onClick={() => isActiveField ? stopVoiceRecognition() : startVoiceRecognition(fieldName)}
+                        className={`ml-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                            isActiveField
+                                ? 'bg-red-500 text-white shadow-lg animate-pulse'
+                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                        }`}
+                        title={getTitle()}
+                    >
+                        {getButtonText()}
+                    </button>
+                );
+            };
+
+            // Validación
+            const canFinishParte = () => {
+                const hasWorkName = formData.nombreTrabajo && formData.nombreTrabajo.trim().length > 0;
+                const hasValidOperario = formData.operarios.some(op =>
+                    op.nombre && op.nombre.trim().length > 0 &&
+                    op.horas && parseFloat(op.horas) > 0
+                );
+                return hasWorkName && hasValidOperario;
+            };
+
+            // Navegación entre pasos
+            const nextStep = () => {
+                if (currentStep < steps.length - 1) {
+                    setCurrentStep(currentStep + 1);
+                }
+            };
+
+            const prevStep = () => {
+                if (currentStep > 0) {
+                    setCurrentStep(currentStep - 1);
+                }
+            };
+
+            // Compartir por WhatsApp
+            const shareToWhatsApp = async () => {
+                const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
+
+                // Crear resumen para WhatsApp
+                const resumenWhatsApp = `
+📋 *PARTE DIARIO DE TRABAJO*
+
+🏗️ *Proyecto:* ${formData.nombreTrabajo}
+📅 *Fecha:* ${formData.fecha}
+⏰ *Total Horas:* ${totalHoras}h
+👷‍♂️ *Operarios:* ${formData.operarios.length}
+
+*👥 PERSONAL:*
+${formData.operarios.map((op, i) => `${i+1}. ${op.nombre}: ${op.horas}h`).join('\n')}
+
+*🔧 TRABAJOS REALIZADOS:*
+${formData.trabajosRealizados}
+
+*📦 MATERIALES:*
+${formData.materialesUtilizados}
+
+${formData.incidencias ? `*⚠️ INCIDENCIAS:*\n${formData.incidencias}\n` : ''}
+
+${formData.observaciones ? `*📝 OBSERVACIONES:*\n${formData.observaciones}\n` : ''}
+
+${formData.tareasPendientes ? `*📋 TAREAS PENDIENTES:*\n${formData.tareasPendientes}\n` : ''}
+
+📷 *Imágenes adjuntas:* ${formData.imagenes.length}
+📄 *Albaranes:* ${formData.albaranes.length}
+                `.trim();
+
+                try {
+                    // Intentar usar Web Share API primero
+                    if (navigator.share) {
+                        await navigator.share({
+                            title: `Parte Diario - ${formData.nombreTrabajo}`,
+                            text: resumenWhatsApp,
+                        });
+                        return;
+                    }
+
+                    // Fallback: Abrir WhatsApp Web
+                    const encodedText = encodeURIComponent(resumenWhatsApp);
+                    const whatsappUrl = `https://wa.me/?text=${encodedText}`;
+                    window.open(whatsappUrl, '_blank');
+
+                } catch (error) {
+                    console.log('Error compartiendo:', error);
+                    // Fallback final: copiar al portapapeles
+                    if (navigator.clipboard) {
+                        await navigator.clipboard.writeText(resumenWhatsApp);
+                        alert('📋 Texto copiado al portapapeles\n\nPuedes pegarlo en WhatsApp o cualquier otra app');
+                    } else {
+                        // Mostrar el texto para copiar manualmente
+                        alert(`📱 Copia este texto para WhatsApp:\n\n${resumenWhatsApp}`);
+                    }
+                }
+            };
+
+            // Exportar a PDF
+            const exportToPDF = () => {
+                return new Promise((resolve) => {
+                const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
+                const fecha = new Date(formData.fecha);
+                const fechaFormateada = fecha.toLocaleDateString('es-ES', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+
+                const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Parte Diario de Trabajo - ${formData.nombreTrabajo}</title>
+    <style>
+        @media print {
+            body { margin: 0; }
+            .page-break { page-break-after: always; }
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 210mm;
+            margin: 0 auto;
+            padding: 20mm;
+            line-height: 1.6;
+            color: #333;
+            background: white;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #2563eb;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .company-logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2563eb;
+            margin-bottom: 5px;
+        }
+        .document-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1e40af;
+            margin: 10px 0;
+        }
+        .work-info {
+            background: #f8fafc;
+            border-left: 4px solid #2563eb;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .section {
+            margin: 25px 0;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1e40af;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 8px;
+            margin-bottom: 15px;
+        }
+        .personnel-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        .personnel-table th,
+        .personnel-table td {
+            border: 1px solid #cbd5e1;
+            padding: 12px;
+            text-align: left;
+        }
+        .personnel-table th {
+            background: #f1f5f9;
+            font-weight: bold;
+            color: #1e40af;
+        }
+        .personnel-table .total-row {
+            background: #e0f2fe;
+            font-weight: bold;
+        }
+        .content-box {
+            background: #fafafa;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .alert-box {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-left: 4px solid #ef4444;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .warning-box {
+            background: #fffbeb;
+            border: 1px solid #fed7aa;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .pending-box {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-left: 4px solid #0284c7;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2563eb;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 5px;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e2e8f0;
+            text-align: center;
+            font-size: 12px;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="company-logo">🏗️ CONSTRUCCIONES</div>
+        <div class="document-title">PARTE DIARIO DE TRABAJO</div>
+        <div style="font-size: 14px; color: #64748b;">Documento oficial - ${new Date().toLocaleDateString('es-ES')}</div>
+    </div>
+
+    <div class="work-info">
+        <h2 style="margin: 0 0 10px 0; color: #1e40af;">📋 INFORMACIÓN DEL TRABAJO</h2>
+        <p style="margin: 5px 0;"><strong>Proyecto:</strong> ${formData.nombreTrabajo}</p>
+        <p style="margin: 5px 0;"><strong>Fecha:</strong> ${fechaFormateada}</p>
+        <p style="margin: 5px 0;"><strong>Generado:</strong> ${new Date().toLocaleString('es-ES')}</p>
+    </div>
+
+    <div class="summary-stats">
+        <div class="stat-card">
+            <div class="stat-number">${totalHoras}h</div>
+            <div class="stat-label">HORAS TOTALES</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">${formData.operarios.length}</div>
+            <div class="stat-label">OPERARIOS</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">${formData.imagenes.length}</div>
+            <div class="stat-label">IMÁGENES</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">${formData.incidencias ? 'SÍ' : 'NO'}</div>
+            <div class="stat-label">INCIDENCIAS</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3 class="section-title">👷‍♂️ PERSONAL Y HORAS TRABAJADAS</h3>
+        <table class="personnel-table">
+            <thead>
+                <tr>
+                    <th>Operario</th>
+                    <th>Horas Trabajadas</th>
+                    <th>Observaciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${formData.operarios.map(op => `
+                <tr>
+                    <td>${op.nombre}</td>
+                    <td>${op.horas}h</td>
+                    <td>-</td>
+                </tr>
+                `).join('')}
+                <tr class="total-row">
+                    <td><strong>TOTAL HORAS</strong></td>
+                    <td><strong>${totalHoras}h</strong></td>
+                    <td><strong>${(totalHoras / formData.operarios.length).toFixed(1)}h promedio</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h3 class="section-title">🔧 TRABAJOS REALIZADOS</h3>
+        <div class="content-box">
+            <p>${formData.trabajosRealizados}</p>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3 class="section-title">📦 MATERIALES UTILIZADOS</h3>
+        <div class="content-box">
+            <p>• ${formData.materialesUtilizados}</p>
+        </div>
+    </div>
+
+    ${formData.incidencias ? `
+    <div class="section">
+        <h3 class="section-title">⚠️ INCIDENCIAS</h3>
+        <div class="alert-box">
+            <p>${formData.incidencias}</p>
+        </div>
+    </div>
+    ` : ''}
+
+    ${formData.observaciones ? `
+    <div class="section">
+        <h3 class="section-title">💡 OBSERVACIONES</h3>
+        <div class="warning-box">
+            <p>${formData.observaciones}</p>
+        </div>
+    </div>
+    ` : ''}
+
+    ${formData.tareasPendientes ? `
+    <div class="section">
+        <h3 class="section-title">📋 TAREAS PENDIENTES</h3>
+        <div class="pending-box">
+            <p>• ${formData.tareasPendientes}</p>
+        </div>
+    </div>
+    ` : ''}
+
+    ${(formData.imagenes && formData.imagenes.length > 0) || (formData.albaranes && formData.albaranes.length > 0) ? `
+    <div class="section page-break">
+        <h3 class="section-title">📎 ARCHIVOS ADJUNTOS</h3>
+
+        ${formData.imagenes && formData.imagenes.length > 0 ? `
+        <div style="margin: 20px 0;">
+            <h4 style="color: #059669; margin: 20px 0 15px 0;">📷 IMÁGENES DEL TRABAJO (${formData.imagenes.length})</h4>
+            ${formData.imagenes.map((imagen, index) => `
+                <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; background: white; margin: 15px 0; text-align: center;">
+                    <img src="${imagen.data || imagen.url}" alt="${imagen.name}" style="max-width: 100%; width: auto; height: auto; border-radius: 4px; margin: 0 auto 10px auto; display: block;">
+                    <p style="margin: 0; font-size: 12px; color: #64748b; font-weight: bold;">📷 Imagen ${index + 1}</p>
+                    <p style="margin: 5px 0 0 0; font-size: 11px; color: #64748b;">${imagen.name}</p>
+                    <p style="margin: 2px 0 0 0; font-size: 10px; color: #94a3b8;">${imagen.size ? (imagen.size / 1024 / 1024).toFixed(2) + ' MB' : 'Tamaño no disponible'}</p>
+                </div>
+            `).join('')}
+        </div>
+        ` : ''}
+
+        ${formData.albaranes && formData.albaranes.length > 0 ? `
+        <div style="margin-top: 30px;">
+            <h4 style="color: #dc2626; margin: 20px 0 15px 0;">📄 ALBARANES Y DOCUMENTOS (${formData.albaranes.length})</h4>
+            ${formData.albaranes.map((albaran, index) => {
+                const isImage = (albaran.type && albaran.type.startsWith('image/')) ||
+                              (albaran.name && /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(albaran.name));
+
+                if (isImage) {
+                    return `
+                        <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin: 15px 0; background: white; text-align: center;">
+                            <img src="${albaran.data || albaran.url}" alt="${albaran.name}" style="max-width: 100%; width: auto; height: auto; border-radius: 4px; margin: 0 auto 10px auto; display: block;">
+                            <p style="margin: 0; font-size: 12px; color: #dc2626; font-weight: bold;">📄 Documento ${index + 1}</p>
+                            <p style="margin: 5px 0 0 0; font-size: 11px; color: #64748b;">${albaran.name}</p>
+                            <p style="margin: 2px 0 0 0; font-size: 10px; color: #94a3b8;">${albaran.size ? (albaran.size / 1024 / 1024).toFixed(2) + ' MB' : 'Tamaño no disponible'}</p>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin: 15px 0; background: #fafafa; border-left: 4px solid #dc2626;">
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <div style="font-size: 48px;">📄</div>
+                                <div>
+                                    <p style="margin: 0; font-size: 14px; color: #dc2626; font-weight: bold;">📄 Documento ${index + 1}</p>
+                                    <p style="margin: 5px 0 0 0; font-size: 12px; color: #374151; font-weight: bold;">${albaran.name}</p>
+                                    <p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b;">Tamaño: ${albaran.size ? (albaran.size / 1024 / 1024).toFixed(2) + ' MB' : 'No disponible'}</p>
+                                    <p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b;">Tipo: ${albaran.category || albaran.type || 'Documento'}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }).join('')}
+        </div>
+        ` : ''}
+    </div>
+    ` : ''}
+
+    <div class="footer">
+        <p>Documento generado automáticamente por el Sistema de Gestión de Partes Diarios Móvil</p>
+        <p>Este documento es válido sin firma según la normativa interna de la empresa</p>
+        <p>Generado el ${new Date().toLocaleString('es-ES')}</p>
+    </div>
+</body>
+</html>`;
+
+                // Crear y descargar archivo
+                const blob = new Blob([htmlContent], { type: 'text/html' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `Parte_Diario_${formData.fecha}_${formData.nombreTrabajo?.replace(/[^a-zA-Z0-9]/g, '_') || 'sin_nombre'}.html`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                // Resolver la Promise después de la descarga
+                setTimeout(() => {
+                    resolve();
+                }, 100);
+                });
+            };
+
+            // Definir pasos
+            const steps = [
+                'Información básica',
+                'Personal y horas',
+                'Trabajos realizados',
+                'Materiales utilizados',
+                'Incidencias y observaciones',
+                'Tareas pendientes',
+                'Imágenes',
+                'Albaranes',
+                'Resumen final'
+            ];
+
+            // Indicador de estado de guardado
+            const SaveStatusIndicator = () => {
+                const getStatusInfo = () => {
+                    switch (saveStatus) {
+                        case 'saving':
+                            return { text: 'Guardando...', color: 'text-yellow-600', icon: '⏳' };
+                        case 'saved':
+                            return { text: 'Guardado', color: 'text-green-600', icon: '✅' };
+                        case 'error':
+                            return { text: 'Error al guardar', color: 'text-red-600', icon: '❌' };
+                        default:
+                            return { text: 'Sin guardar', color: 'text-gray-600', icon: '⚪' };
+                    }
+                };
+
+                const status = getStatusInfo();
+                return (
+                    <div className={`flex items-center gap-1 text-sm ${status.color}`}>
+                        <span>{status.icon}</span>
+                        <span>{status.text}</span>
+                    </div>
+                );
+            };
+
+            // Renderizar paso actual
+            const renderStep = () => {
+                switch (currentStep) {
+                    case 0: // Información básica
+                        return (
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">¿Cuál es el nombre del trabajo o proyecto?</label>
+                                    <input
+                                        type="text"
+                                        value={formData.nombreTrabajo}
+                                        onChange={(e) => handleInputChange('nombreTrabajo', e.target.value)}
+                                        placeholder="Ej: Construcción casa unifamiliar, Reforma baño..."
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <div className="flex gap-2 mt-2">
+                                        <VoiceButton fieldName="nombreTrabajo" />
+                                        <button
+                                            onClick={() => handleInputChange('nombreTrabajo', '')}
+                                            className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                            title="Borrar contenido"
+                                        >
+                                            🗑️ Borrar
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Fecha del trabajo</label>
+                                    <input
+                                        type="date"
+                                        value={formData.fecha}
+                                        onChange={(e) => handleInputChange('fecha', e.target.value)}
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+                        );
+
+                    case 1: // Personal y horas
+                        return (
+                            <div className="space-y-6">
+                                <h3 className="text-lg font-semibold">👷‍♂️ Personal trabajando</h3>
+
+                                {/* Lista de operarios registrados */}
+                                {formData.operarios.filter(op => op.nombre.trim() && op.horas).length > 0 && (
+                                    <div className="space-y-3">
+                                        <h4 className="font-medium text-gray-700">✅ Operarios registrados:</h4>
+                                        {formData.operarios
+                                            .filter(op => op.nombre.trim() && op.horas)
+                                            .map((operario, index) => (
+                                            <div key={index} className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                                                <span className="font-medium">
+                                                    👷‍♂️ {operario.nombre} - {operario.horas}h
+                                                </span>
+                                                <button
+                                                    onClick={() => {
+                                                        const realIndex = formData.operarios.findIndex(op =>
+                                                            op.nombre === operario.nombre && op.horas === operario.horas
+                                                        );
+                                                        removeOperario(realIndex);
+                                                    }}
+                                                    className="text-red-600 hover:text-red-800 px-2 py-1 rounded"
+                                                >
+                                                    ❌
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Formulario para añadir nuevo operario */}
+                                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <h4 className="font-medium mb-3">➕ Añadir operario</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">Nombre</label>
+                                            <input
+                                                type="text"
+                                                value={formData.newOperario?.nombre || ''}
+                                                onChange={(e) => setFormData(prev => ({
+                                                    ...prev,
+                                                    newOperario: { ...prev.newOperario, nombre: e.target.value }
+                                                }))}
+                                                placeholder="Nombre del operario"
+                                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <div className="flex gap-2 mt-2">
+                                                <VoiceButton fieldName="newOperario-nombre" />
+                                                <button
+                                                    onClick={() => setFormData(prev => ({
+                                                        ...prev,
+                                                        newOperario: { ...prev.newOperario, nombre: '' }
+                                                    }))}
+                                                    className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                                    title="Borrar nombre"
+                                                >
+                                                    🗑️ Borrar
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">Horas trabajadas</label>
+                                            <input
+                                                type="number"
+                                                step="0.5"
+                                                min="0"
+                                                max="24"
+                                                value={formData.newOperario?.horas || ''}
+                                                onChange={(e) => setFormData(prev => ({
+                                                    ...prev,
+                                                    newOperario: { ...prev.newOperario, horas: e.target.value }
+                                                }))}
+                                                placeholder="8"
+                                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onClick={() => {
+                                            const newOp = formData.newOperario;
+                                            if (newOp?.nombre?.trim() && newOp?.horas) {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    operarios: [...prev.operarios, { nombre: newOp.nombre, horas: newOp.horas }],
+                                                    newOperario: { nombre: '', horas: '' }
+                                                }));
+                                            } else {
+                                                alert('⚠️ Por favor completa el nombre y las horas');
+                                            }
+                                        }}
+                                        className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                        disabled={!formData.newOperario?.nombre?.trim() || !formData.newOperario?.horas}
+                                    >
+                                        ➕ Añadir operario
+                                    </button>
+                                </div>
+
+                                <div className="bg-blue-50 p-4 rounded-lg">
+                                    <h4 className="font-semibold text-blue-800 mb-2">📊 Resumen de horas</h4>
+                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                        <div>
+                                            <span className="font-medium">Total horas:</span> {formData.operarios.filter(op => op.nombre.trim() && op.horas).reduce((sum, op) => sum + parseFloat(op.horas), 0)}h
+                                        </div>
+                                        <div>
+                                            <span className="font-medium">Operarios registrados:</span> {formData.operarios.filter(op => op.nombre.trim() && op.horas).length}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+
+                    case 2: // Trabajos realizados
+                        return (
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Describe detalladamente los trabajos realizados hoy</label>
+                                    <textarea
+                                        value={formData.trabajosRealizados}
+                                        onChange={(e) => handleInputChange('trabajosRealizados', e.target.value)}
+                                        placeholder="Describe qué trabajos específicos se han realizado hoy..."
+                                        rows="6"
+                                        className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                                            isListening && currentField === 'trabajosRealizados' ? 'voice-active' : ''
+                                        }`}
+                                    />
+                                    <div className="flex gap-2 mt-2">
+                                        <VoiceButton fieldName="trabajosRealizados" />
+                                        <button
+                                            onClick={() => handleInputChange('trabajosRealizados', '')}
+                                            className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                            title="Borrar contenido"
+                                        >
+                                            🗑️ Borrar
+                                        </button>
+                                    </div>
+
+                                    {isListening && currentField === 'trabajosRealizados' && (
+                                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                                            <p className="text-sm text-red-700">🎤 Dictando... Habla claramente y haz pausas entre ideas</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+
+                    case 3: // Materiales utilizados
+                        return (
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">¿Qué materiales y herramientas se han utilizado?</label>
+                                    <textarea
+                                        value={formData.materialesUtilizados}
+                                        onChange={(e) => handleInputChange('materialesUtilizados', e.target.value)}
+                                        placeholder="Lista los materiales, herramientas y equipos utilizados..."
+                                        rows="5"
+                                        className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                                            isListening && currentField === 'materialesUtilizados' ? 'voice-active' : ''
+                                        }`}
+                                    />
+                                    <div className="flex gap-2 mt-2">
+                                        <VoiceButton fieldName="materialesUtilizados" />
+                                        <button
+                                            onClick={() => handleInputChange('materialesUtilizados', '')}
+                                            className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                            title="Borrar contenido"
+                                        >
+                                            🗑️ Borrar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+
+                    case 4: // Incidencias y observaciones
+                        return (
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">🚨 ¿Ha habido alguna incidencia o problema?</label>
+                                    <textarea
+                                        value={formData.incidencias}
+                                        onChange={(e) => handleInputChange('incidencias', e.target.value)}
+                                        placeholder="Describe cualquier problema, incidencia o situación especial..."
+                                        rows="4"
+                                        className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                                            isListening && currentField === 'incidencias' ? 'voice-active' : ''
+                                        }`}
+                                    />
+                                    <div className="flex gap-2 mt-2">
+                                        <VoiceButton fieldName="incidencias" />
+                                        <button
+                                            onClick={() => handleInputChange('incidencias', '')}
+                                            className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                            title="Borrar contenido"
+                                        >
+                                            🗑️ Borrar
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">💡 Observaciones adicionales</label>
+                                    <textarea
+                                        value={formData.observaciones}
+                                        onChange={(e) => handleInputChange('observaciones', e.target.value)}
+                                        placeholder="Cualquier observación, comentario o nota adicional..."
+                                        rows="4"
+                                        className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                                            isListening && currentField === 'observaciones' ? 'voice-active' : ''
+                                        }`}
+                                    />
+                                    <div className="flex gap-2 mt-2">
+                                        <VoiceButton fieldName="observaciones" />
+                                        <button
+                                            onClick={() => handleInputChange('observaciones', '')}
+                                            className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                            title="Borrar contenido"
+                                        >
+                                            🗑️ Borrar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+
+                    case 5: // Tareas pendientes
+                        return (
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">📋 ¿Qué queda pendiente para mañana o próximos días?</label>
+                                    <textarea
+                                        value={formData.tareasPendientes}
+                                        onChange={(e) => handleInputChange('tareasPendientes', e.target.value)}
+                                        placeholder="Lista las tareas que quedan pendientes, materiales que faltan, etc..."
+                                        rows="5"
+                                        className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                                            isListening && currentField === 'tareasPendientes' ? 'voice-active' : ''
+                                        }`}
+                                    />
+                                    <div className="flex gap-2 mt-2">
+                                        <VoiceButton fieldName="tareasPendientes" />
+                                        <button
+                                            onClick={() => handleInputChange('tareasPendientes', '')}
+                                            className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                            title="Borrar contenido"
+                                        >
+                                            🗑️ Borrar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+
+                    case 6: // Imágenes
+                        return (
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-medium mb-3">📷 Fotos del trabajo realizado</label>
+
+                                    {/* Botones de opciones */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                                        {/* Tomar foto con cámara */}
+                                        <div>
+                                            <label className="block text-xs text-gray-600 mb-1">Tomar foto nueva:</label>
+                                            <input
+                                                type="file"
+                                                multiple
+                                                accept="image/*"
+                                                capture="environment"
+                                                onChange={async (e) => {
+                                                    const files = Array.from(e.target.files);
+                                                    const processFiles = async () => {
+                                                        const processedImages = [];
+
+                                                        for (const file of files) {
+                                                            try {
+                                                                const base64 = await convertToBase64(file);
+                                                                processedImages.push({
+                                                                    name: file.name,
+                                                                    size: file.size,
+                                                                    type: file.type,
+                                                                    data: base64,
+                                                                    timestamp: new Date().toISOString()
+                                                                });
+                                                            } catch (error) {
+                                                                console.error('Error procesando imagen:', file.name, error);
+                                                            }
+                                                        }
+
+                                                        const allImages = [...(formData.imagenes || []), ...processedImages];
+                                                        handleInputChange('imagenes', allImages);
+                                                    };
+
+                                                    processFiles();
+                                                    e.target.value = '';
+                                                }}
+                                                className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-blue-50"
+                                            />
+                                        </div>
+
+                                        {/* Seleccionar desde galería */}
+                                        <div>
+                                            <label className="block text-xs text-gray-600 mb-1">Seleccionar desde galería:</label>
+                                            <input
+                                                type="file"
+                                                multiple
+                                                accept="image/*"
+                                                onChange={async (e) => {
+                                                    const files = Array.from(e.target.files);
+                                                    const processFiles = async () => {
+                                                        const processedImages = [];
+
+                                                        for (const file of files) {
+                                                            try {
+                                                                const base64 = await convertToBase64(file);
+                                                                processedImages.push({
+                                                                    name: file.name,
+                                                                    size: file.size,
+                                                                    type: file.type,
+                                                                    data: base64,
+                                                                    timestamp: new Date().toISOString()
+                                                                });
+                                                            } catch (error) {
+                                                                console.error('Error procesando imagen:', file.name, error);
+                                                            }
+                                                        }
+
+                                                        const allImages = [...(formData.imagenes || []), ...processedImages];
+                                                        handleInputChange('imagenes', allImages);
+                                                    };
+
+                                                    processFiles();
+                                                    e.target.value = '';
+                                                }}
+                                                className="w-full p-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-green-50"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {formData.imagenes && formData.imagenes.length > 0 && (
+                                        <div className="mt-3">
+                                            <p className="text-sm text-gray-600 mb-3">
+                                                {formData.imagenes.length} imagen(es) adjuntada(s):
+                                            </p>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                                {formData.imagenes.map((image, index) => (
+                                                    <div key={index} className="relative border rounded-lg p-2 bg-gray-50">
+                                                        <img
+                                                            src={image.data}
+                                                            alt={image.name}
+                                                            className="w-full h-24 object-cover rounded mb-2"
+                                                            onError={(e) => {
+                                                                e.target.style.display = 'none';
+                                                                e.target.nextSibling.style.display = 'block';
+                                                            }}
+                                                        />
+                                                        <div className="hidden text-center text-gray-500 text-xs">
+                                                            Error cargando imagen
+                                                        </div>
+                                                        <p className="text-xs text-gray-600 truncate">
+                                                            {image.name}
+                                                        </p>
+                                                        <p className="text-xs text-gray-500">
+                                                            {(image.size / 1024).toFixed(0)} KB
+                                                        </p>
+                                                        <button
+                                                            onClick={() => {
+                                                                const newImages = formData.imagenes.filter((_, i) => i !== index);
+                                                                handleInputChange('imagenes', newImages);
+                                                            }}
+                                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+
+                    case 7: // Albaranes
+                        return (
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-medium mb-3">📄 Albaranes y documentos</label>
+
+                                    {/* Botones de opciones para albaranes */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                                        {/* Capturar nuevo documento */}
+                                        <div>
+                                            <label className="block text-xs text-gray-600 mb-1">Capturar documento nuevo:</label>
+                                            <input
+                                                type="file"
+                                                multiple
+                                                accept="image/*"
+                                                capture="environment"
+                                                onChange={(e) => {
+                                                    const files = Array.from(e.target.files);
+                                                    files.forEach(file => {
+                                                        const reader = new FileReader();
+                                                        reader.onload = (event) => {
+                                                            const newAlbaran = {
+                                                                name: file.name,
+                                                                url: event.target.result,
+                                                                data: event.target.result,
+                                                                size: file.size,
+                                                                type: file.type,
+                                                                category: 'albaran'
+                                                            };
+                                                            const currentAlbaranes = formData.albaranes || [];
+                                                            const newAlbaranes = [...currentAlbaranes, newAlbaran];
+                                                            setFormData({...formData, albaranes: newAlbaranes});
+                                                        };
+                                                        reader.readAsDataURL(file);
+                                                    });
+                                                    e.target.value = '';
+                                                }}
+                                                className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-blue-50"
+                                            />
+                                        </div>
+
+                                        {/* Seleccionar archivo existente */}
+                                        <div>
+                                            <label className="block text-xs text-gray-600 mb-1">Seleccionar archivo existente:</label>
+                                            <input
+                                                type="file"
+                                                multiple
+                                                accept="image/*,application/pdf,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                                                onChange={(e) => {
+                                                    const files = Array.from(e.target.files);
+                                                    files.forEach(file => {
+                                                        const reader = new FileReader();
+                                                        reader.onload = (event) => {
+                                                            const newAlbaran = {
+                                                                name: file.name,
+                                                                url: event.target.result,
+                                                                data: event.target.result,
+                                                                size: file.size,
+                                                                type: file.type,
+                                                                category: file.type.startsWith('image/') ? 'imagen' : 'documento'
+                                                            };
+                                                            const currentAlbaranes = formData.albaranes || [];
+                                                            const newAlbaranes = [...currentAlbaranes, newAlbaran];
+                                                            setFormData({...formData, albaranes: newAlbaranes});
+                                                        };
+                                                        reader.readAsDataURL(file);
+                                                    });
+                                                    e.target.value = '';
+                                                }}
+                                                className="w-full p-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-green-50"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Información sobre tipos de archivo */}
+                                    <div className="bg-gray-50 p-3 rounded-lg">
+                                        <p className="text-xs text-gray-600">
+                                            💡 <strong>Tipos admitidos:</strong> Imágenes (JPG, PNG, etc.), PDF, Word, Excel, archivos de texto
+                                        </p>
+                                    </div>
+
+                                    {formData.albaranes && formData.albaranes.length > 0 && (
+                                        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            {formData.albaranes.map((albaran, index) => (
+                                                <div key={index} className="relative border rounded-lg overflow-hidden bg-gray-50">
+                                                    <img
+                                                        src={albaran.url}
+                                                        alt={albaran.name}
+                                                        className="w-full h-32 object-cover"
+                                                    />
+                                                    <div className="absolute top-2 right-2">
+                                                        <button
+                                                            onClick={() => {
+                                                                const newAlbaranes = formData.albaranes.filter((_, i) => i !== index);
+                                                                setFormData({...formData, albaranes: newAlbaranes});
+                                                            }}
+                                                            className="bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600"
+                                                            title="Eliminar albarán"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </div>
+                                                    <div className="p-2">
+                                                        <p className="text-xs text-gray-600 truncate">{albaran.name}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+
+                    case 8: // Resumen final
+                        const totalHoras = formData.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0);
+                        return (
+                            <div className="space-y-6">
+                                <div className="bg-blue-50 p-6 rounded-lg border-2 border-blue-200">
+                                    <h4 className="font-semibold text-blue-800 mb-3">📊 Estadísticas del Parte</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                        <div className="text-center">
+                                            <div className="font-bold text-lg text-blue-600">
+                                                {totalHoras}h
+                                            </div>
+                                            <div className="text-gray-600">Horas Totales</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="font-bold text-lg text-green-600">{formData.operarios.length}</div>
+                                            <div className="text-gray-600">Operarios</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="font-bold text-lg text-orange-600">
+                                                {formData.incidencias ? 'Con Incidencias' : 'Sin Incidencias'}
+                                            </div>
+                                            <div className="text-gray-600">
+                                                {formData.incidencias ? 'Con Incidencias' : 'Sin Incidencias'}
+                                            </div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="font-bold text-lg text-purple-600">{formData.imagenes.length}</div>
+                                            <div className="text-gray-600">Imágenes</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="font-bold text-lg text-green-600">{formData.albaranes?.length || 0}</div>
+                                            <div className="text-gray-600">Albaranes</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <button
+                                        onClick={() => { saveToHistory(); exportToPDF(); }}
+                                        className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center justify-center gap-2"
+                                    >
+                                        📄 Descargar PDF
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            saveToHistory();
+                                            await sendByWhatsApp();
+                                        }}
+                                        className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors duration-200 flex items-center justify-center gap-2"
+                                    >
+                                        📱 Enviar WhatsApp
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            saveToHistory();
+                                            await sendByEmail();
+                                        }}
+                                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center justify-center gap-2"
+                                    >
+                                        📧 Enviar Email
+                                    </button>
+                                </div>
+
+                                {/* Botón de limpiar parte */}
+                                <div className="mt-4 text-center">
+                                    <button
+                                        onClick={() => {
+                                            if (confirm('⚠️ ¿Estás seguro de limpiar el parte actual?\n\nSe perderán todos los datos no guardados.')) {
+                                                createNewParte();
+                                                alert('🧹 Parte limpiado. Listo para empezar uno nuevo.');
+                                            }
+                                        }}
+                                        className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors duration-200 flex items-center justify-center gap-2 mx-auto"
+                                    >
+                                        🧹 Limpiar Parte
+                                    </button>
+                                </div>
+
+                                <div className="bg-yellow-50 p-3 rounded-lg">
+                                    <p className="text-sm text-yellow-700">
+                                        💡 <strong>Opciones de envío:</strong> WhatsApp para comunicación rápida, PDF para documentos oficiales, y Email para envío formal. Todos guardan automáticamente en el historial.
+                                    </p>
+                                </div>
+                            </div>
+                        );
+
+                    default:
+                        return null;
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Header */}
+                    <div className="bg-white shadow-sm border-b">
+                        <div className="max-w-4xl mx-auto px-4 py-4">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h1 className="text-xl sm:text-2xl font-bold text-green-700">📱 Partes de Trabajo Móvil</h1>
+                                    <p className="text-sm text-gray-600">App offline para partes diarios</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <SaveStatusIndicator />
+                                </div>
+                            </div>
+
+                            {/* Botones de navegación */}
+                            <div className="mt-4 flex flex-wrap gap-2">
+                                <button
+                                    onClick={() => setShowHistory(true)}
+                                    className="px-3 py-2 sm:py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm"
+                                >
+                                    📚 Historial ({partesHistory.length})
+                                </button>
+                                <button
+                                    onClick={() => setShowSettings(true)}
+                                    className="px-3 py-2 sm:py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm"
+                                >
+                                    ⚙️ Configuración
+                                </button>
+                                <button
+                                    onClick={createNewParte}
+                                    className="px-3 py-2 sm:py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm"
+                                >
+                                    ➕ Nuevo Parte
+                                </button>
+                                <button
+                                    onClick={() => cleanLastPartes(5)}
+                                    className="px-3 py-2 sm:py-1 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 text-sm"
+                                >
+                                    🗑️ Limpiar Historial
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Progreso */}
+                    <div className="bg-white border-b">
+                        <div className="max-w-4xl mx-auto px-4 py-4">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm font-medium text-gray-700">
+                                    Paso {currentStep + 1} de {steps.length}
+                                </span>
+                                <span className="text-sm text-gray-500">
+                                    {Math.round(((currentStep + 1) / steps.length) * 100)}%
+                                </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div
+                                    className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                                    style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
+                                ></div>
+                            </div>
+                            <p className="text-lg font-semibold text-gray-800 mt-3">
+                                {steps[currentStep]}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Contenido principal */}
+                    <div className="max-w-4xl mx-auto px-4 py-6">
+                        <div className="bg-white rounded-lg shadow-sm border p-6">
+                            {renderStep()}
+
+                            {/* Navegación */}
+                            <div className="flex justify-between mt-8">
+                                <button
+                                    onClick={prevStep}
+                                    disabled={currentStep === 0}
+                                    className={`px-6 py-3 rounded-lg ${
+                                        currentStep === 0
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'bg-gray-600 text-white hover:bg-gray-700'
+                                    }`}
+                                >
+                                    ← Anterior
+                                </button>
+
+                                <button
+                                    onClick={nextStep}
+                                    disabled={currentStep === steps.length - 1}
+                                    className={`px-6 py-3 rounded-lg ${
+                                        currentStep === steps.length - 1
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                                    }`}
+                                >
+                                    Siguiente →
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Modal de Configuración */}
+                    {showSettings && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50">
+                            <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] sm:max-h-[80vh] overflow-y-auto">
+                                <div className="p-4 sm:p-6 border-b">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-lg sm:text-xl font-bold text-green-700">⚙️ Configuración Móvil</h3>
+                                        <button
+                                            onClick={() => setShowSettings(false)}
+                                            className="px-3 py-2 sm:px-4 sm:py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm sm:text-base"
+                                        >
+                                            ❌
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+                                    {/* Configuración de Envío */}
+                                    <div className="bg-green-50 p-4 sm:p-6 rounded-lg border-2 border-green-200">
+                                        <h4 className="font-bold mb-3 sm:mb-4 text-green-800 text-base sm:text-lg">📱 Configuración de Envío</h4>
+
+                                        <div className="space-y-4">
+                                            {/* Método de envío */}
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Método de envío preferido:
+                                                </label>
+                                                <select
+                                                    value={sendMethod}
+                                                    onChange={(e) => setSendMethod(e.target.value)}
+                                                    className="w-full px-4 py-3 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                >
+                                                    <option value="email">📧 Email</option>
+                                                    <option value="whatsapp">📱 WhatsApp</option>
+                                                </select>
+                                            </div>
+
+                                            {/* Configuración Email */}
+                                            {sendMethod === 'email' && (
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        Tu email:
+                                                    </label>
+                                                    <input
+                                                        type="email"
+                                                        value={userEmail}
+                                                        onChange={(e) => setUserEmail(e.target.value)}
+                                                        placeholder="tu@email.com"
+                                                        className="w-full px-4 py-3 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {/* Configuración WhatsApp */}
+                                            {sendMethod === 'whatsapp' && (
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        Tu número de WhatsApp:
+                                                    </label>
+                                                    <input
+                                                        type="tel"
+                                                        value={userWhatsApp}
+                                                        onChange={(e) => setUserWhatsApp(e.target.value)}
+                                                        placeholder="+34 123 456 789"
+                                                        className="w-full px-4 py-3 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                    />
+                                                    <p className="text-xs text-gray-600 mt-1">
+                                                        Incluye el código de país (ej: +34 para España)
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {/* Botón guardar */}
+                                            <button
+                                                onClick={() => {
+                                                    saveMobileConfig(userEmail, userWhatsApp, sendMethod);
+                                                    alert('✅ Configuración guardada correctamente');
+                                                    setShowSettings(false);
+                                                }}
+                                                className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm sm:text-base"
+                                            >
+                                                💾 Guardar Configuración
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Información */}
+                                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                                        <h4 className="font-semibold text-blue-800 mb-2">ℹ️ Cómo funciona</h4>
+                                        <ul className="text-sm text-blue-700 space-y-1">
+                                            <li>• <strong>Email:</strong> Se abre tu app de email con el parte listo</li>
+                                            <li>• <strong>WhatsApp:</strong> Se abre WhatsApp con el resumen preparado</li>
+                                            <li>• <strong>PDF:</strong> Se descarga automáticamente para adjuntar</li>
+                                            <li>• <strong>Offline:</strong> Funciona sin internet, sincroniza después</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Modal de Historial */}
+                    {showHistory && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50">
+                            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                                <div className="p-4 sm:p-6 border-b">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-lg sm:text-xl font-bold text-blue-700">📚 Historial de Partes</h3>
+                                        <button
+                                            onClick={() => setShowHistory(false)}
+                                            className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                                        >
+                                            ❌
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 sm:p-6">
+                                    {partesHistory.length === 0 ? (
+                                        <div className="text-center py-8">
+                                            <p className="text-gray-500">No hay partes guardados en el historial</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {partesHistory.map((parte, index) => (
+                                                <div key={parte.id} className="border rounded-lg p-4 bg-gray-50">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <h4 className="font-semibold text-lg">{parte.nombreTrabajo}</h4>
+                                                        <span className="text-xs text-gray-500">
+                                                            {new Date(parte.fechaCreacion).toLocaleDateString('es-ES')}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-3">
+                                                        <div>
+                                                            <span className="font-medium">Horas:</span> {parte.operarios.reduce((sum, op) => sum + (parseFloat(op.horas) || 0), 0)}h
+                                                        </div>
+                                                        <div>
+                                                            <span className="font-medium">Operarios:</span> {parte.operarios.length}
+                                                        </div>
+                                                        <div>
+                                                            <span className="font-medium">Imágenes:</span> {parte.imagenes?.length || 0}
+                                                        </div>
+                                                        <div>
+                                                            <span className="font-medium">Fecha:</span> {parte.fecha}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mt-3 flex gap-2">
+                                                        <button
+                                                            onClick={() => {
+                                                                setFormData(parte);
+                                                                setShowHistory(false);
+                                                                setCurrentStep(0);
+                                                            }}
+                                                            className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm"
+                                                        >
+                                                            👁️ Ver/Editar
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                const template = {
+                                                                    ...parte,
+                                                                    id: 'parte_' + Date.now(),
+                                                                    fecha: new Date().toISOString().split('T')[0],
+                                                                    imagenes: [],
+                                                                    albaranes: [],
+                                                                    resumenInteligente: ''
+                                                                };
+                                                                setFormData(template);
+                                                                setShowHistory(false);
+                                                                setCurrentStep(0);
+                                                            }}
+                                                            className="px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm"
+                                                        >
+                                                            📋 Usar como plantilla
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.render(<PartesDiarioApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>

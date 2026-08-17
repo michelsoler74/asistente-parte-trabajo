@@ -1,0 +1,254 @@
+import React, { useState, useEffect } from 'react';
+import { useApp } from '../../context/AppContext';
+import { 
+  Settings, 
+  Building2, 
+  Database, 
+  Download, 
+  Upload, 
+  Save, 
+  CheckCircle2, 
+  Sparkles,
+  ShieldCheck,
+  RefreshCw,
+  FolderOpen
+} from 'lucide-react';
+
+export const ConfiguracionView = () => {
+  const { 
+    empresa, 
+    saveEmpresaConfig, 
+    exportFullBackup, 
+    importFullBackup,
+    loadMonthDemoData,
+    obras,
+    operarios,
+    partes,
+    albaranes,
+    showToast 
+  } = useApp();
+
+  const [formEmpresa, setFormEmpresa] = useState({
+    nombre: '',
+    cif: '',
+    direccion: '',
+    ciudad: '',
+    telefono: '',
+    email: '',
+    whatsappEnvio: '',
+    colorPrimario: '#0269c9'
+  });
+
+  useEffect(() => {
+    if (empresa) {
+      setFormEmpresa({ ...empresa });
+    }
+  }, [empresa]);
+
+  const handleSubmitEmpresa = async (e) => {
+    e.preventDefault();
+    await saveEmpresaConfig(formEmpresa);
+  };
+
+  const handleFileImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      await importFullBackup(event.target.result);
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div className="space-y-8 pb-24 max-w-4xl mx-auto">
+      {/* Cabecera */}
+      <div>
+        <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+          Ajustes y Configuración de Empresa
+        </h2>
+        <p className="text-xs sm:text-sm text-slate-500">
+          Personaliza los datos de cabecera de tus PDFs, copias de seguridad y datos de demostración
+        </p>
+      </div>
+
+      {/* 1. SECCIÓN: DATOS DE LA EMPRESA CONSTRUCTORA */}
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
+        <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+          <div className="p-2.5 rounded-2xl bg-brand-50 text-brand-600">
+            <Building2 className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-bold text-base text-slate-900">Datos Fiscales y de Contacto</h3>
+            <p className="text-xs text-slate-500">Aparecerán automáticamente en los partes diarios en PDF</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmitEmpresa} className="space-y-4 text-xs sm:text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Nombre Comercial / Razón Social *</label>
+              <input
+                type="text"
+                required
+                value={formEmpresa.nombre || ''}
+                onChange={(e) => setFormEmpresa(prev => ({ ...prev, nombre: e.target.value }))}
+                placeholder="Ej: CONSTRUCCIONES Y REFORMAS IBIZA S.L."
+                className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">CIF / NIF</label>
+              <input
+                type="text"
+                value={formEmpresa.cif || ''}
+                onChange={(e) => setFormEmpresa(prev => ({ ...prev, cif: e.target.value }))}
+                placeholder="B-12345678"
+                className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-medium"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">Dirección Completa</label>
+            <input
+              type="text"
+              value={formEmpresa.direccion || ''}
+              onChange={(e) => setFormEmpresa(prev => ({ ...prev, direccion: e.target.value }))}
+              placeholder="Ej: Camí des Cubells 12, Ibiza"
+              className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-medium"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Teléfono Oficina</label>
+              <input
+                type="tel"
+                value={formEmpresa.telefono || ''}
+                onChange={(e) => setFormEmpresa(prev => ({ ...prev, telefono: e.target.value }))}
+                placeholder="971 000 000"
+                className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-medium"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Email de Envío</label>
+              <input
+                type="email"
+                value={formEmpresa.email || ''}
+                onChange={(e) => setFormEmpresa(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="info@miempresa.es"
+                className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-medium"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">WhatsApp Destino</label>
+              <input
+                type="tel"
+                value={formEmpresa.whatsappEnvio || ''}
+                onChange={(e) => setFormEmpresa(prev => ({ ...prev, whatsappEnvio: e.target.value }))}
+                placeholder="+34 600 000 000"
+                className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-medium"
+              />
+            </div>
+          </div>
+
+          <div className="pt-3">
+            <button
+              type="submit"
+              className="px-6 py-3 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-brand-600/20 active:scale-95 transition-all flex items-center gap-2"
+            >
+              <Save className="w-4 h-4" />
+              <span>Guardar Cambios de Empresa</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* 2. SECCIÓN: DATOS DE DEMOSTRACIÓN (1 MES, 4 CUADRILLAS, 4 OBRAS) */}
+      <div className="bg-gradient-to-br from-brand-900 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl space-y-4 border border-brand-800">
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-500/30 text-brand-300 text-xs font-bold">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Demostración Comercial y Pruebas</span>
+            </div>
+            <h3 className="text-lg sm:text-xl font-extrabold text-white">
+              Cargar Histórico Realista de 1 Mes
+            </h3>
+            <p className="text-xs text-slate-300 max-w-xl leading-relaxed">
+              Genera <strong>4 Obras en Ibiza</strong> (Villa Es Cubells, Dalt Vila, Santa Gertrudis, Roca Llisa), <strong>14 Operarios con sus tarifas</strong> y <strong>80 Partes Diarios completos</strong> de las últimas 4 semanas para ver y enseñar todo el potencial de la plataforma.
+            </p>
+          </div>
+        </div>
+
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={loadMonthDemoData}
+            className="py-3.5 px-6 rounded-2xl bg-brand-500 hover:bg-brand-400 text-white font-black text-xs sm:text-sm flex items-center gap-2.5 shadow-lg shadow-brand-500/30 active:scale-95 transition-all"
+          >
+            <RefreshCw className="w-4 h-4 stroke-[2.5]" />
+            <span>Generar y Cargar 4 Cuadrillas y 1 Mes de Partes</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 3. SECCIÓN: COPIAS DE SEGURIDAD & ALMACENAMIENTO */}
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
+        <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+          <div className="p-2.5 rounded-2xl bg-emerald-50 text-emerald-600">
+            <Database className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-bold text-base text-slate-900">Copias de Seguridad e Importación</h3>
+            <p className="text-xs text-slate-500">Tus datos se guardan en IndexedDB local sin límite de 5MB</p>
+          </div>
+        </div>
+
+        {/* Resumen de Datos Locales */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-center">
+            <span className="text-[10px] font-bold uppercase text-slate-400">Obras</span>
+            <div className="text-lg font-extrabold text-slate-900">{obras.length}</div>
+          </div>
+          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-center">
+            <span className="text-[10px] font-bold uppercase text-slate-400">Personal</span>
+            <div className="text-lg font-extrabold text-slate-900">{operarios.length}</div>
+          </div>
+          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-center">
+            <span className="text-[10px] font-bold uppercase text-slate-400">Partes Guardados</span>
+            <div className="text-lg font-extrabold text-slate-900">{partes.length}</div>
+          </div>
+          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-center">
+            <span className="text-[10px] font-bold uppercase text-slate-400">Albaranes</span>
+            <div className="text-lg font-extrabold text-slate-900">{albaranes.length}</div>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4 pt-2">
+          <button
+            type="button"
+            onClick={exportFullBackup}
+            className="flex-1 py-3.5 px-5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
+          >
+            <Download className="w-4 h-4 text-emerald-400" />
+            <span>Descargar Copia de Seguridad (.JSON)</span>
+          </button>
+
+          <label className="flex-1 py-3.5 px-5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border border-slate-200 cursor-pointer active:scale-95 transition-all">
+            <Upload className="w-4 h-4 text-brand-600" />
+            <span>Restaurar Copia (.JSON)</span>
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleFileImport}
+              className="hidden"
+            />
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+};
