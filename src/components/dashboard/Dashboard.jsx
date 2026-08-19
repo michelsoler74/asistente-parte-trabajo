@@ -17,13 +17,15 @@ import {
   Printer,
   DollarSign,
   Receipt,
-  Layers
+  Layers,
+  FileSpreadsheet
 } from 'lucide-react';
 import { generatePartePDF } from '../../services/pdfGenerator';
 import { shareToWhatsApp } from '../../services/shareService';
+import { exportLibroCompletoExcel } from '../../services/excelExportService';
 
 export const Dashboard = () => {
-  const { obras, operarios, partes, albaranes, setCurrentTab, setSelectedObraId, setEditingParteId, empresa, userRole } = useApp();
+  const { obras, operarios, partes, albaranes, setCurrentTab, setSelectedObraId, setEditingParteId, empresa, userRole, showToast } = useApp();
 
   const todayStr = new Date().toISOString().split('T')[0];
   const partesHoy = partes.filter(p => p.fecha === todayStr);
@@ -61,6 +63,11 @@ export const Dashboard = () => {
     setCurrentTab('nuevo-parte');
   };
 
+  const handleExportExcel = () => {
+    exportLibroCompletoExcel({ obras, partes, operarios, albaranes, empresa });
+    showToast('Libro Excel descargado con 4 pestañas formateadas');
+  };
+
   return (
     <div className="space-y-6 pb-20 md:pb-8">
       {/* Banner de Bienvenida y Acciones Rápidas */}
@@ -82,6 +89,17 @@ export const Dashboard = () => {
           </div>
 
           <div className="flex flex-wrap gap-3">
+            {userRole === 'admin' && (
+              <button
+                onClick={handleExportExcel}
+                className="flex items-center gap-2 px-4 py-3.5 rounded-2xl bg-emerald-600/90 hover:bg-emerald-600 text-white font-bold text-xs sm:text-sm border border-emerald-500/30 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all touch-manipulation"
+                title="Exportar Libro Completo Excel con 4 hojas: Rentabilidad, Partes, Liquidación y Albaranes"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Exportar Excel</span>
+              </button>
+            )}
+
             <button
               onClick={startNewParte}
               className="flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-brand-500 hover:bg-brand-400 text-white font-bold text-sm shadow-lg shadow-brand-500/30 active:scale-95 transition-all touch-manipulation"

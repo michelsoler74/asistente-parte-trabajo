@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { generatePartePDF } from '../../services/pdfGenerator';
+import { generatePartePDF, generateDossierObraPDF } from '../../services/pdfGenerator';
 import { shareToWhatsApp } from '../../services/shareService';
-import { exportResumenObrasCostesCSV } from '../../services/excelExportService';
+import { exportLibroCompletoExcel } from '../../services/excelExportService';
 import { ImageViewerModal } from '../common/ImageViewerModal';
 import { 
   Building2, 
@@ -161,15 +161,25 @@ export const ObraDetalle = () => {
     setCurrentTab('nuevo-parte');
   };
 
+  const handleGenerateDossier = () => {
+    generateDossierObraPDF({
+      obra,
+      partes: partesDeObra,
+      albaranes: albaranesDeObra,
+      operarios: operariosParticipantes,
+      empresa
+    });
+  };
+
   const handleExportCostes = () => {
-    exportResumenObrasCostesCSV(obras, partes, operarios, albaranes);
-    showToast('Informe de Rentabilidad Total descargado en Excel (.CSV)');
+    exportLibroCompletoExcel({ obras: [obra], partes: partesDeObra, operarios, albaranes: albaranesDeObra, empresa });
+    showToast('Libro Excel de la obra descargado con éxito');
   };
 
   return (
     <div className="space-y-6 pb-24 max-w-5xl mx-auto">
-      {/* Botón Volver */}
-      <div className="flex items-center justify-between">
+      {/* Botón Volver y Acciones de Exportación */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           onClick={() => setCurrentTab('obras')}
           className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors"
@@ -178,15 +188,27 @@ export const ObraDetalle = () => {
           <span>Volver a Obras</span>
         </button>
 
-        {userRole === 'admin' && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={handleExportCostes}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 text-xs font-bold transition-all"
+            onClick={handleGenerateDossier}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-sm transition-all"
+            title="Generar e imprimir Dossier Completo de la Obra en PDF"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>Excel de Rentabilidad</span>
+            <Printer className="w-3.5 h-3.5 text-brand-400" />
+            <span>Dossier PDF</span>
           </button>
-        )}
+
+          {userRole === 'admin' && (
+            <button
+              onClick={handleExportCostes}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold border border-emerald-200 shadow-sm transition-all"
+              title="Exportar datos financieros y partes de esta obra a Excel"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Excel de Obra</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Ficha Principal de la Obra */}

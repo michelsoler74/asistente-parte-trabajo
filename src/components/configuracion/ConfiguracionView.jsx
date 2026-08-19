@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
+import { exportLibroCompletoExcel } from '../../services/excelExportService';
 import { 
   Settings, 
   Building2, 
@@ -8,10 +9,11 @@ import {
   Upload, 
   Save, 
   CheckCircle2, 
-  Sparkles,
-  ShieldCheck,
-  RefreshCw,
-  FolderOpen
+  Sparkles, 
+  ShieldCheck, 
+  RefreshCw, 
+  FolderOpen,
+  FileSpreadsheet
 } from 'lucide-react';
 
 export const ConfiguracionView = () => {
@@ -227,19 +229,29 @@ export const ConfiguracionView = () => {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 pt-2">
+        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => exportLibroCompletoExcel({ obras, partes, operarios, albaranes, empresa })}
+            className="flex-1 py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
+            title="Descargar libro de trabajo Excel con 4 hojas: Rentabilidad, Partes, Liquidación y Albaranes"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Descargar Libro Excel (.XLS)</span>
+          </button>
+
           <button
             type="button"
             onClick={exportFullBackup}
-            className="flex-1 py-3.5 px-5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
+            className="flex-1 py-3.5 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
           >
             <Download className="w-4 h-4 text-emerald-400" />
-            <span>Descargar Copia de Seguridad (.JSON)</span>
+            <span>Copia de Seguridad (.JSON)</span>
           </button>
 
-          <label className="flex-1 py-3.5 px-5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border border-slate-200 cursor-pointer active:scale-95 transition-all">
+          <label className="flex-1 py-3.5 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border border-slate-200 cursor-pointer active:scale-95 transition-all">
             <Upload className="w-4 h-4 text-brand-600" />
-            <span>Restaurar Copia (.JSON)</span>
+            <span>Restaurar (.JSON)</span>
             <input
               type="file"
               accept=".json"
