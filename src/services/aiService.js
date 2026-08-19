@@ -1,13 +1,14 @@
 /**
  * Servicio de Inteligencia Artificial para Obra Control vía OpenRouter (Modelos Free Oficiales).
  * Soporta sincronización en tiempo real con la API de OpenRouter (/api/v1/models)
- * para garantizar que la lista de modelos gratuitos siempre esté 100% actualizada.
+ * y validación oficial de credenciales (/api/v1/auth/key).
  */
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models';
+const OPENROUTER_AUTH_URL = 'https://openrouter.ai/api/v1/auth/key';
 
-export const DEFAULT_FREE_TEXT_MODEL = 'google/gemma-4-31b-it:free';
+export const DEFAULT_FREE_TEXT_MODEL = 'openrouter/free';
 export const DEFAULT_FREE_VISION_MODEL = 'nvidia/nemotron-nano-12b-v2-vl:free';
 
 // Lista base verificada de modelos Free oficiales de OpenRouter
@@ -69,17 +70,19 @@ export const VERIFIED_FREE_MODELS = [
 ];
 
 /**
+ * Limpia y normaliza la clave API
+ */
+export const sanitizeApiKey = (key) => {
+  if (!key) return '';
+  return String(key).trim().replace(/^["'\s]+|["'\s]+$/g, '');
+};
+
+/**
  * Consulta en directo la API de OpenRouter para obtener todos los modelos Free reales y activos
  */
 export const fetchLiveFreeModels = async () => {
   try {
-    const response = await fetch(OPENROUTER_MODELS_URL, {
-      method: 'GET',
-      headers: {
-        'HTTP-Referer': 'https://platform-construc.netlify.app',
-        'X-Title': 'Obra Control'
-      }
-    });
+    const response = await fetch(OPENROUTER_MODELS_URL);
 
     if (!response.ok) {
       throw new Error(`No se pudo consultar el catálogo de OpenRouter (${response.status})`);
@@ -88,7 +91,6 @@ export const fetchLiveFreeModels = async () => {
     const data = await response.json();
     const allModels = data?.data || [];
 
-    // Filtrar únicamente los modelos que terminan en :free o son openrouter/free o tienen coste 0
     const freeModels = allModels.filter(m => {
       const isFreeId = m.id.endsWith(':free') || m.id === 'openrouter/free';
       const isZeroPrice = m.pricing && m.pricing.prompt === '0' && m.pricing.completion === '0';
@@ -124,49 +126,51 @@ export const fetchLiveFreeModels = async () => {
  * Obtiene la API Key configurada
  */
 export const getOpenRouterApiKey = (empresa = {}) => {
-  return (
+  const rawKey = 
     empresa?.openRouterApiKey ||
     localStorage.getItem('__obracontrol_openrouter_key__') ||
     import.meta.env.VITE_OPENROUTER_API_KEY ||
-    ''
-  ).trim();
+    '';
+  return sanitizeApiKey(rawKey);
 };
 
 /**
- * Prueba la conexión con OpenRouter
+ * Prueba la conexión con OpenRouter mediante el endpoint oficial de autenticación (/auth/key)
  */
 export const testAiConnection = async (apiKey, model = DEFAULT_FREE_TEXT_MODEL) => {
-  if (!apiKey) {
-    throw new Error('No has introducido ninguna API Key de OpenRouter.');
+  const cleanKey = sanitizeApiKey(apiKey);
+  if (!cleanKey) {
+    throw new Error('Por favor introduce tu API Key de OpenRouter (empieza por sk-or-v1-...).');
   }
 
-  const selectedModel = model || DEFAULT_FREE_TEXT_MODEL;
-
-  const response = await fetch(OPENROUTER_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': 'https://platform-construc.netlify.app',
-      'X-Title': 'Obra Control'
-    },
-    body: JSON.stringify({
-      model: selectedModel,
-      messages: [
-        { role: 'user', content: 'Responde únicamente con la palabra "CONECTADO".' }
-      ],
-      max_tokens: 10
-    })
-  });
-
-  if (!response.ok) {
-    const errData = await response.json().catch(() => ({}));
-    throw new Error(errData?.error?.message || `Error de conexión OpenRouter (${response.status})`);
+  if (!cleanKey.startsWith('sk-or-')) {
+    throw new Error('La clave no parece tener el formato estándar de OpenRouter (debe empezar por "sk-or-v1-..."). Revisa si copiaste la clave completa.');
   }
 
-  const data = await response.json();
-  const text = data?.choices?.[0]?.message?.content?.trim() || '';
-  return text.length > 0;
+  try {
+    const response = await fetch(OPENROUTER_AUTH_URL, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${cleanKey}`
+      }
+    });
+
+    if (response.status === 401) {
+      throw new Error('Clave API no válida o revocada (Error 401). Comprueba tu clave en https://openrouter.ai/keys');
+    }
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData?.error?.message || `Error del servidor OpenRouter (Código ${response.status})`);
+    }
+
+    const result = await response.json();
+    const label = result?.data?.label || 'Clave de OpenRouter';
+    return { success: true, label };
+  } catch (err) {
+    console.error('Error al verificar OpenRouter API Key:', err);
+    throw err;
+  }
 };
 
 /**
@@ -177,8 +181,8 @@ export const refinarTextoTecnicoIA = async ({ textoBorrador, tipo = 'trabajos', 
     throw new Error('Por favor escribe o dicta algo de texto antes de pedirle a la IA que lo mejore.');
   }
 
-  const apiKey = getOpenRouterApiKey(empresa);
-  if (!apiKey) {
+  const cleanKey = getOpenRouterApiKey(empresa);
+  if (!cleanKey) {
     throw new Error('Debes configurar tu API Key gratuita de OpenRouter en la pestaña Configuración para usar la IA.');
   }
 
@@ -202,9 +206,7 @@ Texto original a transformar:
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://platform-construc.netlify.app',
-        'X-Title': 'Obra Control'
+        'Authorization': `Bearer ${cleanKey}`
       },
       body: JSON.stringify({
         model: model,
@@ -219,7 +221,13 @@ Texto original a transformar:
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      throw new Error(errData?.error?.message || `Error en la llamada a OpenRouter (${response.status})`);
+      if (response.status === 401) {
+        throw new Error('Clave API no autorizada (401). Verifica tu clave en Configuración.');
+      }
+      if (response.status === 429) {
+        throw new Error('El modelo gratuito seleccionado está temporalmente ocupado (429). Prueba de nuevo en unos segundos o cambia a "openrouter/free".');
+      }
+      throw new Error(errData?.error?.message || `Error en OpenRouter (${response.status})`);
     }
 
     const data = await response.json();
@@ -243,12 +251,11 @@ export const extraerDatosAlbaranIA = async ({ imageBase64, empresa = {} }) => {
     throw new Error('No se ha proporcionado ninguna imagen para analizar.');
   }
 
-  const apiKey = getOpenRouterApiKey(empresa);
-  if (!apiKey) {
+  const cleanKey = getOpenRouterApiKey(empresa);
+  if (!cleanKey) {
     throw new Error('Debes configurar tu API Key gratuita de OpenRouter en la pestaña Configuración para usar la lectura de albaranes con IA.');
   }
 
-  // Si el usuario configuró un modelo específico y soporta visión, usarlo; sino usar el modelo de visión free por defecto
   const visionModel = empresa?.openRouterVisionModel || DEFAULT_FREE_VISION_MODEL;
 
   let formattedImageUrl = imageBase64;
@@ -277,9 +284,7 @@ REGLAS:
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://platform-construc.netlify.app',
-        'X-Title': 'Obra Control'
+        'Authorization': `Bearer ${cleanKey}`
       },
       body: JSON.stringify({
         model: visionModel,
@@ -304,6 +309,12 @@ REGLAS:
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        throw new Error('Clave API no autorizada (401). Verifica tu clave en Configuración.');
+      }
+      if (response.status === 429) {
+        throw new Error('El modelo de visión gratuito está ocupado (429). Espera unos segundos e inténtalo de nuevo.');
+      }
       throw new Error(errData?.error?.message || `Error al procesar albarán con OpenRouter (${response.status})`);
     }
 

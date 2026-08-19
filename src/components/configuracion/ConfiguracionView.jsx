@@ -100,8 +100,8 @@ export const ConfiguracionView = () => {
   const handleTestAiConnection = async () => {
     setIsTestingAi(true);
     try {
-      await testAiConnection(formEmpresa.openRouterApiKey, formEmpresa.openRouterModel);
-      showToast('¡Conexión exitosa con OpenRouter AI!', 'success');
+      const res = await testAiConnection(formEmpresa.openRouterApiKey, formEmpresa.openRouterModel);
+      showToast(`¡Conexión exitosa con OpenRouter! (${res?.label || 'Clave Válida'})`, 'success');
     } catch (err) {
       showToast(err.message || 'Error al conectar con OpenRouter', 'error');
     } finally {
