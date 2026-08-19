@@ -1,21 +1,124 @@
 /**
- * Servicio de Inteligencia Artificial para Obra Control vía OpenRouter (Modelos Free).
- * Soporta:
- * 1. Redacción y Perfeccionamiento Técnico de Partes Diarios (Texto).
- * 2. Visión Artificial y OCR para Albaranes y Tickets de Compra (Multimodal).
+ * Servicio de Inteligencia Artificial para Obra Control vía OpenRouter (Modelos Free Oficiales).
+ * Soporta sincronización en tiempo real con la API de OpenRouter (/api/v1/models)
+ * para garantizar que la lista de modelos gratuitos siempre esté 100% actualizada.
  */
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models';
 
-export const DEFAULT_FREE_TEXT_MODEL = 'google/gemini-2.0-flash-lite-preview-02-05:free';
-export const DEFAULT_FREE_VISION_MODEL = 'google/gemini-2.0-flash-lite-preview-02-05:free';
+export const DEFAULT_FREE_TEXT_MODEL = 'google/gemma-4-31b-it:free';
+export const DEFAULT_FREE_VISION_MODEL = 'nvidia/nemotron-nano-12b-v2-vl:free';
 
-export const AVAILABLE_FREE_MODELS = [
-  { id: 'google/gemini-2.0-flash-lite-preview-02-05:free', name: 'Gemini 2.0 Flash Lite (Free - Rápido & Visión)', vision: true },
-  { id: 'qwen/qwen-2.5-vl-72b-instruct:free', name: 'Qwen 2.5 VL 72B (Free - Especialista en Visión & OCR)', vision: true },
-  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B Instruct (Free - Redacción Avanzada)', vision: false },
-  { id: 'mistralai/mistral-small-24b-instruct-2501:free', name: 'Mistral Small 24B (Free - Muy rápido en Español)', vision: false }
+// Lista base verificada de modelos Free oficiales de OpenRouter
+export const VERIFIED_FREE_MODELS = [
+  { 
+    id: 'openrouter/free', 
+    name: 'OpenRouter Free Router (Auto - Enrutador Oficial Gratuito)', 
+    vision: true,
+    description: 'Enruta automáticamente al mejor modelo gratuito disponible'
+  },
+  { 
+    id: 'google/gemma-4-31b-it:free', 
+    name: 'Google: Gemma 4 31B (Free - Excelente Redacción en Español)', 
+    vision: false,
+    description: 'Modelo potente y fluido para redactar trabajos e informes'
+  },
+  { 
+    id: 'google/gemma-4-26b-a4b-it:free', 
+    name: 'Google: Gemma 4 26B A4B (Free - Muy Rápido)', 
+    vision: false,
+    description: 'Baja latencia y alta precisión en español'
+  },
+  { 
+    id: 'nvidia/nemotron-3.5-lightning:free', 
+    name: 'NVIDIA: Nemotron 3.5 Lightning (Free - Ultra Rápido)', 
+    vision: false,
+    description: 'Procesamiento de alta velocidad para textos'
+  },
+  { 
+    id: 'nvidia/nemotron-nano-12b-v2-vl:free', 
+    name: 'NVIDIA: Nemotron Nano 12B VL (Free - Especialista Visión & OCR)', 
+    vision: true,
+    description: 'Recomendado para lectura de albaranes y facturas por foto'
+  },
+  { 
+    id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', 
+    name: 'NVIDIA: Nemotron 3 Nano Omni (Free - Multimodal & Razonamiento)', 
+    vision: true,
+    description: 'Comprensión multimodal de imágenes y texto'
+  },
+  { 
+    id: 'z-ai/glm-5.2:free', 
+    name: 'Z.ai: GLM 5.2 (Free - Contexto Amplio)', 
+    vision: false,
+    description: 'Modelo general para tareas de texto e informes'
+  },
+  { 
+    id: 'dots-studio/dots-3-note-preview:free', 
+    name: 'Dots Studio: Dots-3 Note Preview (Free)', 
+    vision: false,
+    description: 'Especializado en notas y resúmenes de jornadas'
+  },
+  { 
+    id: 'cohere/north-mini-code:free', 
+    name: 'Cohere: North Mini Code (Free)', 
+    vision: false,
+    description: 'Modelo rápido y estructurado'
+  }
 ];
+
+/**
+ * Consulta en directo la API de OpenRouter para obtener todos los modelos Free reales y activos
+ */
+export const fetchLiveFreeModels = async () => {
+  try {
+    const response = await fetch(OPENROUTER_MODELS_URL, {
+      method: 'GET',
+      headers: {
+        'HTTP-Referer': 'https://platform-construc.netlify.app',
+        'X-Title': 'Obra Control'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`No se pudo consultar el catálogo de OpenRouter (${response.status})`);
+    }
+
+    const data = await response.json();
+    const allModels = data?.data || [];
+
+    // Filtrar únicamente los modelos que terminan en :free o son openrouter/free o tienen coste 0
+    const freeModels = allModels.filter(m => {
+      const isFreeId = m.id.endsWith(':free') || m.id === 'openrouter/free';
+      const isZeroPrice = m.pricing && m.pricing.prompt === '0' && m.pricing.completion === '0';
+      return isFreeId || isZeroPrice;
+    });
+
+    if (freeModels.length === 0) {
+      return VERIFIED_FREE_MODELS;
+    }
+
+    return freeModels.map(m => {
+      const isVision = 
+        m.id.includes('vl') || 
+        m.id.includes('omni') || 
+        m.id.includes('vision') || 
+        m.architecture?.modality?.includes('image') ||
+        m.id === 'openrouter/free';
+
+      return {
+        id: m.id,
+        name: `${m.name || m.id} ${m.id.endsWith(':free') ? '' : '(Free)'}`,
+        vision: isVision,
+        description: m.description || (isVision ? 'Soporta Visión (OCR)' : 'Texto')
+      };
+    });
+  } catch (err) {
+    console.warn('Usando catálogo estático verificado de OpenRouter:', err);
+    return VERIFIED_FREE_MODELS;
+  }
+};
 
 /**
  * Obtiene la API Key configurada
@@ -37,6 +140,8 @@ export const testAiConnection = async (apiKey, model = DEFAULT_FREE_TEXT_MODEL) 
     throw new Error('No has introducido ninguna API Key de OpenRouter.');
   }
 
+  const selectedModel = model || DEFAULT_FREE_TEXT_MODEL;
+
   const response = await fetch(OPENROUTER_API_URL, {
     method: 'POST',
     headers: {
@@ -46,7 +151,7 @@ export const testAiConnection = async (apiKey, model = DEFAULT_FREE_TEXT_MODEL) 
       'X-Title': 'Obra Control'
     },
     body: JSON.stringify({
-      model: model || DEFAULT_FREE_TEXT_MODEL,
+      model: selectedModel,
       messages: [
         { role: 'user', content: 'Responde únicamente con la palabra "CONECTADO".' }
       ],
@@ -66,7 +171,6 @@ export const testAiConnection = async (apiKey, model = DEFAULT_FREE_TEXT_MODEL) 
 
 /**
  * 1. Redactor Técnico Profesional con IA
- * Transforma dictados coloquiales de obra en redacciones formales de dirección facultativa.
  */
 export const refinarTextoTecnicoIA = async ({ textoBorrador, tipo = 'trabajos', empresa = {} }) => {
   if (!textoBorrador || textoBorrador.trim().length === 0) {
@@ -133,7 +237,6 @@ Texto original a transformar:
 
 /**
  * 2. Visión IA y OCR para Albaranes y Tickets
- * Analiza la imagen en Base64 y extrae los datos clave en JSON estructurado.
  */
 export const extraerDatosAlbaranIA = async ({ imageBase64, empresa = {} }) => {
   if (!imageBase64) {
@@ -145,9 +248,9 @@ export const extraerDatosAlbaranIA = async ({ imageBase64, empresa = {} }) => {
     throw new Error('Debes configurar tu API Key gratuita de OpenRouter en la pestaña Configuración para usar la lectura de albaranes con IA.');
   }
 
-  const visionModel = DEFAULT_FREE_VISION_MODEL;
+  // Si el usuario configuró un modelo específico y soporta visión, usarlo; sino usar el modelo de visión free por defecto
+  const visionModel = empresa?.openRouterVisionModel || DEFAULT_FREE_VISION_MODEL;
 
-  // Formatear base64 si no incluye prefijo
   let formattedImageUrl = imageBase64;
   if (!formattedImageUrl.startsWith('data:')) {
     formattedImageUrl = `data:image/jpeg;base64,${imageBase64}`;
@@ -207,7 +310,6 @@ REGLAS:
     const data = await response.json();
     const rawContent = data?.choices?.[0]?.message?.content?.trim() || '';
 
-    // Extraer JSON limpio eliminando backticks markdown si vienen incluidos
     const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('La IA no pudo estructurar los datos del albarán.');

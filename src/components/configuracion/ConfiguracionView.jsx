@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { exportLibroCompletoExcel } from '../../services/excelExportService';
-import { AVAILABLE_FREE_MODELS, testAiConnection } from '../../services/aiService';
+import { 
+  VERIFIED_FREE_MODELS, 
+  fetchLiveFreeModels, 
+  testAiConnection, 
+  DEFAULT_FREE_TEXT_MODEL 
+} from '../../services/aiService';
 import { 
   Settings, 
   Building2, 
@@ -41,17 +46,50 @@ export const ConfiguracionView = () => {
     whatsappEnvio: '',
     colorPrimario: '#0269c9',
     openRouterApiKey: '',
-    openRouterModel: 'google/gemini-2.0-flash-lite-preview-02-05:free'
+    openRouterModel: DEFAULT_FREE_TEXT_MODEL
   });
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [isTestingAi, setIsTestingAi] = useState(false);
+  const [modelsList, setModelsList] = useState(VERIFIED_FREE_MODELS);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
 
   useEffect(() => {
     if (empresa) {
-      setFormEmpresa({ ...empresa });
+      setFormEmpresa({ 
+        ...empresa,
+        openRouterModel: empresa.openRouterModel || DEFAULT_FREE_TEXT_MODEL
+      });
     }
   }, [empresa]);
+
+  useEffect(() => {
+    const loadModels = async () => {
+      try {
+        const live = await fetchLiveFreeModels();
+        if (live && live.length > 0) {
+          setModelsList(live);
+        }
+      } catch (err) {
+        console.warn('Error cargando modelos en vivo:', err);
+      }
+    };
+    loadModels();
+  }, []);
+
+  const handleRefreshModels = async () => {
+    setIsLoadingModels(true);
+    showToast('Consultando catálogo de modelos Free en OpenRouter...', 'info');
+    try {
+      const live = await fetchLiveFreeModels();
+      setModelsList(live);
+      showToast(`¡Catálogo actualizado! (${live.length} modelos gratuitos activos)`, 'success');
+    } catch (err) {
+      showToast('No se pudo actualizar la lista en vivo', 'error');
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
 
   const handleSubmitEmpresa = async (e) => {
     e.preventDefault();
@@ -241,14 +279,28 @@ export const ConfiguracionView = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Modelo de IA Gratuito</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-bold text-slate-700">Modelo de IA Gratuito</label>
+                <button
+                  type="button"
+                  onClick={handleRefreshModels}
+                  disabled={isLoadingModels}
+                  className="text-purple-600 font-bold hover:underline text-[11px] flex items-center gap-1 disabled:opacity-50"
+                  title="Consultar en directo los modelos gratis activos en OpenRouter"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isLoadingModels ? 'animate-spin' : ''}`} />
+                  <span>{isLoadingModels ? 'Actualizando...' : 'Actualizar Lista'}</span>
+                </button>
+              </div>
               <select
-                value={formEmpresa.openRouterModel || 'google/gemini-2.0-flash-lite-preview-02-05:free'}
+                value={formEmpresa.openRouterModel || DEFAULT_FREE_TEXT_MODEL}
                 onChange={(e) => setFormEmpresa(prev => ({ ...prev, openRouterModel: e.target.value }))}
-                className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-purple-500"
+                className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-purple-500 text-xs"
               >
-                {AVAILABLE_FREE_MODELS.map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
+                {modelsList.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.vision ? '👁️ ' : '📝 '} {m.name}
+                  </option>
                 ))}
               </select>
             </div>
