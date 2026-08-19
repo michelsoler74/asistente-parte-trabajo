@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { generatePartePDF } from '../../services/pdfGenerator';
 import { shareToWhatsApp } from '../../services/shareService';
 import { exportResumenObrasCostesCSV } from '../../services/excelExportService';
+import { ImageViewerModal } from '../common/ImageViewerModal';
 import { 
   Building2, 
   ArrowLeft, 
@@ -26,12 +27,14 @@ import {
   Receipt,
   Package,
   Layers,
-  Store
+  Store,
+  Maximize2
 } from 'lucide-react';
 
 export const ObraDetalle = () => {
   const { obras, partes, operarios, albaranes, selectedObraId, setSelectedObraId, setCurrentTab, setEditingParteId, empresa, userRole, showToast } = useApp();
   const [activeSubTab, setActiveSubTab] = useState('partes'); // 'partes', 'rentabilidad', 'personal', 'albaranes', 'fotos'
+  const [viewerModal, setViewerModal] = useState({ isOpen: false, images: [], index: 0, title: '' });
 
   const obra = obras.find(o => o.id === selectedObraId);
 
@@ -558,7 +561,7 @@ export const ObraDetalle = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {albaranesDeObra.map((alb) => (
+            {albaranesDeObra.map((alb, idx) => (
               <div key={alb.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm p-4 space-y-2 flex flex-col justify-between">
                 <div>
                   <div className="flex items-start justify-between">
@@ -574,8 +577,16 @@ export const ObraDetalle = () => {
                 </div>
 
                 {alb.url && (
-                  <div className="mt-2 aspect-video bg-slate-100 rounded-xl overflow-hidden border border-slate-200">
-                    <img src={alb.url} alt="Comprobante" className="w-full h-full object-cover" />
+                  <div 
+                    onClick={() => setViewerModal({ isOpen: true, images: albaranesDeObra, index: idx, title: 'Albarán de Obra' })}
+                    className="mt-2 aspect-video bg-slate-100 rounded-xl overflow-hidden border border-slate-200 cursor-pointer relative group"
+                    title="Ver albarán con zoom"
+                  >
+                    <img src={alb.url} alt="Comprobante" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                    <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1">
+                      <Maximize2 className="w-4 h-4" />
+                      <span>Ver con Zoom</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -614,8 +625,13 @@ export const ObraDetalle = () => {
       {activeSubTab === 'fotos' && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           {todasLasFotos.map((foto, idx) => (
-            <div key={idx} className="relative rounded-2xl overflow-hidden bg-slate-100 aspect-square border border-slate-200 group">
-              <img src={foto.url || foto} alt="Foto de obra" className="w-full h-full object-cover" />
+            <div 
+              key={idx} 
+              onClick={() => setViewerModal({ isOpen: true, images: todasLasFotos, index: idx, title: 'Fotos de Obra' })}
+              className="relative rounded-2xl overflow-hidden bg-slate-100 aspect-square border border-slate-200 group cursor-pointer"
+              title="Ver foto en grande"
+            >
+              <img src={foto.url || foto} alt="Foto de obra" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-2 flex flex-col justify-end text-white text-[10px]">
                 <span className="font-semibold">{foto.fechaParte}</span>
                 {foto.caption && <span className="truncate">{foto.caption}</span>}
@@ -624,6 +640,15 @@ export const ObraDetalle = () => {
           ))}
         </div>
       )}
+
+      {/* Visor interactivo con Zoom y Rotación */}
+      <ImageViewerModal
+        isOpen={viewerModal.isOpen}
+        images={viewerModal.images}
+        initialIndex={viewerModal.index}
+        title={viewerModal.title}
+        onClose={() => setViewerModal(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

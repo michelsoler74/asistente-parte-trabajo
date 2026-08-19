@@ -13,13 +13,15 @@ import {
   FileImage,
   DollarSign,
   Store,
-  FileText
+  FileText,
+  Maximize2
 } from 'lucide-react';
+import { ImageViewerModal } from '../common/ImageViewerModal';
 
 export const AlbaranesView = () => {
   const { albaranes, obras, partes, proveedores } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [viewerModal, setViewerModal] = useState({ isOpen: false, index: 0 });
   const [filterProveedor, setFilterProveedor] = useState('todos');
 
   // Recopilar todos los albaranes guardados tanto en la tabla 'albaranes' como embebidos en 'partes'
@@ -78,6 +80,10 @@ export const AlbaranesView = () => {
 
   const totalGastoMateriales = filteredAlbaranes.reduce((sum, a) => sum + (parseFloat(a.importe) || 0), 0);
   const proveedoresUnicos = Array.from(new Set(todosLosAlbaranes.map(a => a.proveedor).filter(Boolean)));
+
+  const openViewer = (idx) => {
+    setViewerModal({ isOpen: true, index: idx });
+  };
 
   return (
     <div className="space-y-6 pb-24 max-w-6xl mx-auto">
@@ -155,7 +161,7 @@ export const AlbaranesView = () => {
 
       {/* Grid de Albaranes */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {filteredAlbaranes.map((alb) => (
+        {filteredAlbaranes.map((alb, idx) => (
           <div
             key={alb.id}
             className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:border-brand-300 hover:shadow-md transition-all flex flex-col justify-between"
@@ -163,7 +169,7 @@ export const AlbaranesView = () => {
             <div>
               {/* Foto o Preview */}
               <div 
-                onClick={() => setSelectedPhoto(alb.url)}
+                onClick={() => openViewer(idx)}
                 className="relative aspect-video bg-slate-100 cursor-pointer overflow-hidden group"
               >
                 <img
@@ -171,9 +177,9 @@ export const AlbaranesView = () => {
                   alt={`Albarán ${alb.numero}`}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1.5">
-                  <Camera className="w-4 h-4" />
-                  <span>Ver Comprobante</span>
+                <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1.5">
+                  <Maximize2 className="w-4 h-4" />
+                  <span>Ver con Zoom</span>
                 </div>
               </div>
 
@@ -210,10 +216,10 @@ export const AlbaranesView = () => {
             <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
               <span>{alb.origen}</span>
               <button
-                onClick={() => setSelectedPhoto(alb.url)}
-                className="font-bold text-brand-600 hover:text-brand-700 hover:underline"
+                onClick={() => openViewer(idx)}
+                className="font-bold text-brand-600 hover:text-brand-700 hover:underline flex items-center gap-1"
               >
-                Ampliar
+                <Maximize2 className="w-3 h-3" /> Ampliar
               </button>
             </div>
           </div>
@@ -228,22 +234,15 @@ export const AlbaranesView = () => {
         </div>
       )}
 
-      {/* Modal Zoom de Foto */}
-      {selectedPhoto && (
-        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="relative bg-white rounded-3xl max-w-2xl w-full p-4 shadow-2xl space-y-4">
-            <button
-              onClick={() => setSelectedPhoto(null)}
-              className="absolute top-4 right-4 p-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 z-10"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="rounded-2xl overflow-hidden max-h-[75vh] flex items-center justify-center bg-slate-950">
-              <img src={selectedPhoto} alt="Comprobante Albarán" className="max-h-[75vh] w-auto object-contain" />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Visor interactivo con Zoom, Rotación y Descarga */}
+      <ImageViewerModal
+        isOpen={viewerModal.isOpen}
+        images={filteredAlbaranes}
+        initialIndex={viewerModal.index}
+        title="Albarán de Materiales"
+        onClose={() => setViewerModal(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };
+

@@ -4,6 +4,8 @@ import { VoiceButton } from '../common/VoiceButton';
 import { SignaturePad } from '../common/SignaturePad';
 import { generatePartePDF } from '../../services/pdfGenerator';
 import { shareToWhatsApp, shareToEmail } from '../../services/shareService';
+import { compressImage, formatFileSize } from '../../services/imageCompressionService';
+import { ImageViewerModal } from '../common/ImageViewerModal';
 import { 
   Building2, 
   Calendar, 
@@ -30,8 +32,11 @@ import {
   Check,
   Search,
   Store,
-  DollarSign
+  DollarSign,
+  Maximize2,
+  Loader2
 } from 'lucide-react';
+
 
 const STEPS = [
   { id: 'obra', title: 'Obra y Fecha', icon: Building2 },
@@ -69,6 +74,8 @@ export const ParteFormWizard = () => {
 
   const [newTempOperario, setNewTempOperario] = useState({ nombre: '', especialidad: 'Operario', horas: 8 });
   const [showAddCustomWorker, setShowAddCustomWorker] = useState(false);
+  const [isProcessingImages, setIsProcessingImages] = useState(false);
+  const [viewerModal, setViewerModal] = useState({ isOpen: false, images: [], index: 0, title: '' });
 
   useEffect(() => {
     if (editingParteId) {
@@ -159,30 +166,49 @@ export const ParteFormWizard = () => {
     }));
   };
 
-  const handleImageUpload = (e, type = 'imagenes') => {
+  const handleImageUpload = async (e, type = 'imagenes') => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
 
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const defaultProveedor = (proveedores && proveedores[0]?.nombre) || 'Rampuixa';
-        const imgObj = {
+    setIsProcessingImages(true);
+    showToast(`Optimizando ${files.length} foto(s)...`, 'info');
+
+    try {
+      const defaultProveedor = (proveedores && proveedores[0]?.nombre) || 'Rampuixa';
+      const compressedList = [];
+
+      for (const file of files) {
+        const result = await compressImage(file, {
+          maxWidth: type === 'albaranes' ? 1800 : 1600,
+          quality: 0.82
+        });
+
+        compressedList.push({
           id: Date.now() + Math.random(),
-          url: event.target.result,
+          url: result.dataUrl,
+          originalSize: result.originalSize,
+          compressedSize: result.compressedSize,
           timestamp: new Date().toISOString(),
           caption: '',
           proveedor: defaultProveedor,
           numero: '',
           importe: ''
-        };
-        setFormData(prev => ({
-          ...prev,
-          [type]: [...prev[type], imgObj]
-        }));
-      };
-      reader.readAsDataURL(file);
-    });
+        });
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        [type]: [...prev[type], ...compressedList]
+      }));
+
+      showToast(`¡${files.length} imagen(es) optimizada(s) y listas!`);
+    } catch (err) {
+      console.error('Error optimizando imágenes:', err);
+      showToast('Error al procesar imágenes', 'error');
+    } finally {
+      setIsProcessingImages(false);
+      e.target.value = '';
+    }
   };
 
   const removeImage = (id, type = 'imagenes') => {
@@ -190,6 +216,15 @@ export const ParteFormWizard = () => {
       ...prev,
       [type]: prev[type].filter(img => img.id !== id)
     }));
+  };
+
+  const openImageViewer = (images, index = 0, title = 'Visor de Imagen') => {
+    setViewerModal({
+      isOpen: true,
+      images,
+      index,
+      title
+    });
   };
 
   const handleSave = async (redirect = true) => {
@@ -699,36 +734,72 @@ export const ParteFormWizard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="font-bold text-sm text-slate-900">Fotos de Avance de Obra</h4>
-                  <p className="text-xs text-slate-500">Captura antes/después o detalles constructivos</p>
+                  <p className="text-xs text-slate-500">Captura antes/después, avances o detalles constructivos</p>
                 </div>
 
-                <label className="cursor-pointer px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-brand-600/20 active:scale-95 transition-all">
-                  <Camera className="w-4 h-4" />
-                  <span>Añadir Fotos</span>
+                <label className={`cursor-pointer px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-brand-600/20 active:scale-95 transition-all ${
+                  isProcessingImages ? 'bg-slate-400 text-white cursor-wait' : 'bg-brand-600 hover:bg-brand-700 text-white'
+                }`}>
+                  {isProcessingImages ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                  <span>{isProcessingImages ? 'Comprimiendo...' : 'Añadir Fotos'}</span>
                   <input
                     type="file"
                     accept="image/*"
                     multiple
+                    disabled={isProcessingImages}
                     onChange={(e) => handleImageUpload(e, 'imagenes')}
                     className="hidden"
                   />
                 </label>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {formData.imagenes.map((img) => (
-                  <div key={img.id} className="relative group rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 aspect-square">
-                    <img src={img.url} alt="Foto de obra" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => removeImage(img.id, 'imagenes')}
-                      className="absolute top-2 right-2 p-1.5 bg-rose-600 text-white rounded-lg shadow-md hover:bg-rose-700 transition-all"
+              {formData.imagenes.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {formData.imagenes.map((img, idx) => (
+                    <div 
+                      key={img.id} 
+                      onClick={() => openImageViewer(formData.imagenes, idx, 'Fotos de Obra')}
+                      className="relative group rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 aspect-square cursor-pointer shadow-sm hover:shadow-md transition-all"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+                      <img src={img.url} alt="Foto de obra" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      
+                      {/* Overlay con lupa */}
+                      <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                        <div className="p-2 rounded-full bg-slate-900/80 backdrop-blur-sm flex items-center gap-1 text-xs font-bold">
+                          <Maximize2 className="w-4 h-4" />
+                          <span>Ver</span>
+                        </div>
+                      </div>
+
+                      {/* Badge de tamaño */}
+                      {img.compressedSize && (
+                        <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-slate-900/80 text-[10px] font-bold text-slate-200">
+                          {formatFileSize(img.compressedSize)}
+                        </div>
+                      )}
+
+                      {/* Botón Eliminar */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeImage(img.id, 'imagenes');
+                        }}
+                        className="absolute top-2 right-2 p-1.5 bg-rose-600 text-white rounded-lg shadow-md hover:bg-rose-700 transition-all z-10"
+                        title="Eliminar foto"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-10 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                  <Camera className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                  <p className="text-xs font-medium text-slate-600">No hay fotos añadidas en este parte</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Las fotos se optimizan y comprimen automáticamente sin perder calidad</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -741,13 +812,16 @@ export const ParteFormWizard = () => {
                   <p className="text-xs text-slate-500">Fotografía e indica el importe del albarán</p>
                 </div>
 
-                <label className="cursor-pointer px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-brand-600/20 active:scale-95 transition-all">
-                  <Receipt className="w-4 h-4" />
-                  <span>Foto Albarán</span>
+                <label className={`cursor-pointer px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-brand-600/20 active:scale-95 transition-all ${
+                  isProcessingImages ? 'bg-slate-400 text-white cursor-wait' : 'bg-brand-600 hover:bg-brand-700 text-white'
+                }`}>
+                  {isProcessingImages ? <Loader2 className="w-4 h-4 animate-spin" /> : <Receipt className="w-4 h-4" />}
+                  <span>{isProcessingImages ? 'Comprimiendo...' : 'Foto Albarán'}</span>
                   <input
                     type="file"
                     accept="image/*"
                     multiple
+                    disabled={isProcessingImages}
                     onChange={(e) => handleImageUpload(e, 'albaranes')}
                     className="hidden"
                   />
@@ -755,9 +829,25 @@ export const ParteFormWizard = () => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {formData.albaranes.map((alb) => (
-                  <div key={alb.id} className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex gap-3 items-center">
-                    <img src={alb.url} alt="Albarán" className="w-20 h-20 object-cover rounded-xl border border-slate-300" />
+                {formData.albaranes.map((alb, idx) => (
+                  <div key={alb.id} className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex gap-3 items-center hover:border-slate-300 transition-all">
+                    {/* Miniatura con zoom */}
+                    <div 
+                      onClick={() => openImageViewer(formData.albaranes, idx, 'Albarán de Materiales')}
+                      className="relative group w-20 h-20 shrink-0 cursor-pointer rounded-xl overflow-hidden border border-slate-300"
+                      title="Ver albarán en grande con zoom"
+                    >
+                      <img src={alb.url} alt="Albarán" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                        <Maximize2 className="w-4 h-4" />
+                      </div>
+                      {alb.compressedSize && (
+                        <span className="absolute bottom-0 inset-x-0 bg-slate-900/80 text-center text-[9px] text-slate-200 font-medium">
+                          {formatFileSize(alb.compressedSize)}
+                        </span>
+                      )}
+                    </div>
+
                     <div className="flex-1 space-y-2">
                       <select
                         value={alb.proveedor || ''}
@@ -814,6 +904,7 @@ export const ParteFormWizard = () => {
                       type="button"
                       onClick={() => removeImage(alb.id, 'albaranes')}
                       className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl"
+                      title="Eliminar albarán"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -825,6 +916,7 @@ export const ParteFormWizard = () => {
                 <div className="text-center py-10 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
                   <Receipt className="w-8 h-8 text-slate-400 mx-auto mb-2" />
                   <p className="text-xs font-medium text-slate-600">No hay albaranes registrados hoy</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Sube la foto del albarán para que quede archivado y vinculado a la obra</p>
                 </div>
               )}
             </div>
@@ -953,6 +1045,15 @@ export const ParteFormWizard = () => {
           </div>
         </div>
       </div>
+
+      {/* Visor interactivo de pantalla completa para Fotos y Albaranes con Zoom y Rotación */}
+      <ImageViewerModal
+        isOpen={viewerModal.isOpen}
+        images={viewerModal.images}
+        initialIndex={viewerModal.index}
+        title={viewerModal.title}
+        onClose={() => setViewerModal(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };
