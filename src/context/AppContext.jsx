@@ -7,8 +7,14 @@ import { generateFullMonthDemoData } from '../db/demoDataGenerator';
 const AppContext = createContext(null);
 
 export const AppProvider = ({ children }) => {
-  // Estado de navegación y Rol de Usuario
-  const [currentTab, setCurrentTab] = useState('dashboard'); // 'dashboard', 'nuevo-parte', 'partes-historial', 'obras', 'personal', 'materiales', 'proveedores-ibiza', 'configuracion'
+  // Estado de navegación y Rol de Usuario (soporta shortcuts de PWA vía URL)
+  const [currentTab, setCurrentTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const urlTab = new URLSearchParams(window.location.search).get('tab');
+      if (urlTab) return urlTab;
+    }
+    return 'dashboard';
+  });
   const [selectedObraId, setSelectedObraId] = useState(null);
   const [editingParteId, setEditingParteId] = useState(null);
   const [userRole, setUserRoleState] = useState(() => {
