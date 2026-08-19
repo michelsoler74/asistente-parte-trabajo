@@ -45,10 +45,18 @@ export const generateWhatsAppText = (parte, empresa = {}) => {
     text += `*📋 TAREAS PENDIENTES PRÓXIMO DÍA:*\n${parte.tareasPendientes.trim()}\n\n`;
   }
 
+  if (parte.geolocalizacion && parte.geolocalizacion.mapsUrl) {
+    text += `📍 *Ubicación GPS Obra:* ${parte.geolocalizacion.mapsUrl}\n\n`;
+  }
+
   const numFotos = (parte.imagenes || []).length;
   const numAlbaranes = (parte.albaranes || []).length;
   if (numFotos > 0 || numAlbaranes > 0) {
     text += `📎 *Adjuntos registrados:* 📸 ${numFotos} fotos | 📄 ${numAlbaranes} albaranes\n`;
+  }
+
+  if (parte.codigoVerificacion) {
+    text += `🛡️ *Sello Digital:* ${parte.codigoVerificacion}\n`;
   }
 
   text += `\n_Generado automáticamente desde Obra Control_`;

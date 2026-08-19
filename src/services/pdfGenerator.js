@@ -261,6 +261,15 @@ export const generatePartePDF = (parte, empresa = {}) => {
     </div>
   </div>
 
+  ${parte.geolocalizacion ? `
+  <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:8px 12px; margin-bottom:16px; font-size:11px; color:#166534; display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <strong>📍 Geolocalización GPS Verificada:</strong> Lat ${parte.geolocalizacion.latitude}, Long ${parte.geolocalizacion.longitude} (Precisión: ±${parte.geolocalizacion.accuracy}m)
+    </div>
+    <a href="${parte.geolocalizacion.mapsUrl}" target="_blank" style="color:#0269c9; font-weight:bold; text-decoration:none;">Ver en Google Maps &rarr;</a>
+  </div>
+  ` : ''}
+
   ${(parte.operarios && parte.operarios.length > 0) ? `
   <div class="section">
     <div class="section-title">👷 Personal y Horas Imputadas</div>
@@ -333,7 +342,7 @@ export const generatePartePDF = (parte, empresa = {}) => {
       ${(parte.albaranes || []).map((alb, i) => `
         <div class="image-card">
           <img src="${alb.url || alb}" alt="Albarán ${i+1}">
-          <div class="image-caption">Albarán ${alb.numero ? `Nº ${alb.numero}` : `${i+1}`} ${alb.proveedor ? `(${alb.proveedor})` : ''}</div>
+          <div class="image-caption">Albarán ${alb.numero ? `Nº ${alb.numero}` : `${i+1}`} ${alb.proveedor ? `(${alb.proveedor})` : ''} ${alb.importe ? `- ${alb.importe}€` : ''}</div>
         </div>
       `).join('')}
     </div>
@@ -354,7 +363,10 @@ export const generatePartePDF = (parte, empresa = {}) => {
   </div>
 
   <div class="footer">
-    <div>Documento generado por Obra Control - Asistente de Gestión de Obras</div>
+    <div>
+      Documento generado por <strong>Obra Control</strong>
+      ${parte.codigoVerificacion ? ` | Sello Digital: <strong>${parte.codigoVerificacion}</strong>` : ''}
+    </div>
     <div>Página 1 de 1</div>
   </div>
 
@@ -373,3 +385,4 @@ export const generatePartePDF = (parte, empresa = {}) => {
   printWindow.document.write(htmlContent);
   printWindow.document.close();
 };
+

@@ -5,6 +5,8 @@ import { SignaturePad } from '../common/SignaturePad';
 import { generatePartePDF } from '../../services/pdfGenerator';
 import { shareToWhatsApp, shareToEmail } from '../../services/shareService';
 import { compressImage, formatFileSize } from '../../services/imageCompressionService';
+import { getCurrentGPSLocation } from '../../services/geoService';
+import { generateVerificationStamp } from '../../services/securityStampService';
 import { ImageViewerModal } from '../common/ImageViewerModal';
 import { 
   Building2, 
@@ -34,9 +36,12 @@ import {
   Store,
   DollarSign,
   Maximize2,
-  Loader2
+  Loader2,
+  MapPin,
+  ShieldCheck,
+  Navigation,
+  ExternalLink
 } from 'lucide-react';
-
 
 const STEPS = [
   { id: 'obra', title: 'Obra y Fecha', icon: Building2 },
@@ -69,12 +74,16 @@ export const ParteFormWizard = () => {
     albaranes: [],
     firmaEncargado: null,
     firmaCliente: null,
+    geolocalizacion: null,
+    codigoVerificacion: '',
+    timestampSello: '',
     estado: 'completado'
   });
 
   const [newTempOperario, setNewTempOperario] = useState({ nombre: '', especialidad: 'Operario', horas: 8 });
   const [showAddCustomWorker, setShowAddCustomWorker] = useState(false);
   const [isProcessingImages, setIsProcessingImages] = useState(false);
+  const [isCapturingGPS, setIsCapturingGPS] = useState(false);
   const [viewerModal, setViewerModal] = useState({ isOpen: false, images: [], index: 0, title: '' });
 
   useEffect(() => {
@@ -227,6 +236,24 @@ export const ParteFormWizard = () => {
     });
   };
 
+  const handleCaptureGPS = async () => {
+    setIsCapturingGPS(true);
+    showToast('Buscando satélites GPS...', 'info');
+    try {
+      const loc = await getCurrentGPSLocation();
+      setFormData(prev => ({
+        ...prev,
+        geolocalizacion: loc
+      }));
+      showToast(`📍 GPS Registrado con precisión ±${loc.accuracy}m`, 'success');
+    } catch (err) {
+      console.warn('Error GPS:', err);
+      showToast(err.message || 'No se pudo obtener la ubicación GPS', 'error');
+    } finally {
+      setIsCapturingGPS(false);
+    }
+  };
+
   const handleSave = async (redirect = true) => {
     if (!formData.obraNombre) {
       showToast('Por favor selecciona o escribe el nombre de la obra', 'error');
@@ -234,7 +261,14 @@ export const ParteFormWizard = () => {
       return null;
     }
 
-    const savedId = await saveParte(formData);
+    let payload = { ...formData };
+    if (!payload.codigoVerificacion) {
+      const stamp = generateVerificationStamp(payload);
+      payload = { ...payload, ...stamp };
+      setFormData(payload);
+    }
+
+    const savedId = await saveParte(payload);
     if (savedId && redirect) {
       setEditingParteId(null);
       setCurrentTab('partes-historial');
@@ -404,6 +438,70 @@ export const ParteFormWizard = () => {
                   onChange={(e) => handleFieldChange('fecha', e.target.value)}
                   className="w-full sm:w-64 p-3.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-500"
                 />
+              </div>
+
+              {/* Geolocalización GPS de Obra */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+                    <MapPin className="w-4 h-4 text-brand-600" />
+                    <span>Ubicación GPS de la Obra</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleCaptureGPS}
+                    disabled={isCapturingGPS}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                      formData.geolocalizacion
+                        ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                        : 'bg-brand-600 hover:bg-brand-700 text-white shadow-sm'
+                    }`}
+                  >
+                    {isCapturingGPS ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Buscando GPS...</span>
+                      </>
+                    ) : formData.geolocalizacion ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>GPS Registrado</span>
+                      </>
+                    ) : (
+                      <>
+                        <Navigation className="w-3.5 h-3.5" />
+                        <span>Capturar GPS</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {formData.geolocalizacion ? (
+                  <div className="flex flex-wrap items-center justify-between text-xs bg-white p-3 rounded-xl border border-emerald-200 text-slate-600 gap-2">
+                    <div>
+                      <span className="font-semibold text-slate-800">
+                        Lat: {formData.geolocalizacion.latitude}, Long: {formData.geolocalizacion.longitude}
+                      </span>
+                      <span className="text-[11px] text-slate-400 ml-2">
+                        (Precisión: ±{formData.geolocalizacion.accuracy}m)
+                      </span>
+                    </div>
+                    <a
+                      href={formData.geolocalizacion.mapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-brand-600 font-bold hover:underline inline-flex items-center gap-1 text-[11px]"
+                    >
+                      <span>Ver en Google Maps</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-500">
+                    Opcional: Registra las coordenadas exactas de la obra para certificar la asistencia y firma del parte.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -949,6 +1047,55 @@ export const ParteFormWizard = () => {
                   <div>📸 Fotos: <strong className="text-white">{formData.imagenes.length}</strong></div>
                   <div>📄 Albaranes: <strong className="text-white">{formData.albaranes.length} ({totalAlbaranesImporte.toFixed(0)}€)</strong></div>
                   <div>⚠️ Incidencias: <strong className="text-white">{formData.incidencias ? 'Sí' : 'No'}</strong></div>
+                </div>
+              </div>
+
+              {/* Sello de Seguridad y Geolocalización */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <span>Sello de Seguridad & Trazabilidad</span>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold">
+                    {formData.codigoVerificacion || 'Se generará al guardar'}
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 gap-2 pt-1">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-brand-600 shrink-0" />
+                    {formData.geolocalizacion ? (
+                      <div className="flex items-center gap-2">
+                        <span>
+                          GPS: <strong>{formData.geolocalizacion.latitude}, {formData.geolocalizacion.longitude}</strong> (±{formData.geolocalizacion.accuracy}m)
+                        </span>
+                        <a
+                          href={formData.geolocalizacion.mapsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-brand-600 font-bold hover:underline inline-flex items-center gap-0.5 text-[11px]"
+                        >
+                          <span>Maps</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    ) : (
+                      <span className="text-slate-400 italic">GPS no capturado aún</span>
+                    )}
+                  </div>
+
+                  {!formData.geolocalizacion && (
+                    <button
+                      type="button"
+                      onClick={handleCaptureGPS}
+                      disabled={isCapturingGPS}
+                      className="text-brand-600 font-bold hover:underline flex items-center gap-1 self-start sm:self-auto text-xs"
+                    >
+                      <Navigation className="w-3.5 h-3.5" />
+                      {isCapturingGPS ? 'Buscando GPS...' : 'Registrar GPS Ahora'}
+                    </button>
+                  )}
                 </div>
               </div>
 
