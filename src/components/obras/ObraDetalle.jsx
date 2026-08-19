@@ -28,13 +28,22 @@ import {
   Package,
   Layers,
   Store,
-  Maximize2
+  Maximize2,
+  ListOrdered,
+  CheckSquare,
+  Sparkles,
+  Check,
+  Trash2,
+  Edit3,
+  X,
+  SlidersHorizontal
 } from 'lucide-react';
 
 export const ObraDetalle = () => {
-  const { obras, partes, operarios, albaranes, selectedObraId, setSelectedObraId, setCurrentTab, setEditingParteId, empresa, userRole, showToast } = useApp();
-  const [activeSubTab, setActiveSubTab] = useState('partes'); // 'partes', 'rentabilidad', 'personal', 'albaranes', 'fotos'
+  const { obras, partes, operarios, albaranes, selectedObraId, setSelectedObraId, setCurrentTab, setEditingParteId, empresa, userRole, showToast, saveObra } = useApp();
+  const [activeSubTab, setActiveSubTab] = useState('partes'); // 'partes', 'partidas', 'rentabilidad', 'personal', 'albaranes', 'fotos'
   const [viewerModal, setViewerModal] = useState({ isOpen: false, images: [], index: 0, title: '' });
+  const [editingPartidaModal, setEditingPartidaModal] = useState(null); // null o { id, nombre, capitulo, importePresupuestado, porcentajeAvance }
 
   const obra = obras.find(o => o.id === selectedObraId);
 
@@ -155,6 +164,102 @@ export const ObraDetalle = () => {
       todasLasFotos.push({ ...img, fechaParte: p.fecha });
     });
   });
+
+  // 3. Módulo de Partidas Presupuestarias y Certificaciones
+  const partidasList = useMemo(() => obra.partidas || [], [obra.partidas]);
+
+  const totalPartidasPresupuesto = useMemo(() => {
+    return partidasList.reduce((sum, p) => sum + (parseFloat(p.importePresupuestado) || 0), 0);
+  }, [partidasList]);
+
+  const totalCertificadoEuros = useMemo(() => {
+    return partidasList.reduce((sum, p) => {
+      const imp = parseFloat(p.importePresupuestado) || 0;
+      const pct = parseFloat(p.porcentajeAvance) || 0;
+      return sum + (imp * pct / 100);
+    }, 0);
+  }, [partidasList]);
+
+  const pctAvanceCertificado = totalPartidasPresupuesto > 0 
+    ? ((totalCertificadoEuros / totalPartidasPresupuesto) * 100).toFixed(1)
+    : (obra.progreso || 0);
+
+  const handleLoadTemplatePartidas = async () => {
+    const basePpto = presupuesto > 0 ? presupuesto : 50000;
+    const plantilla = [
+      { id: 'p1', nombre: 'Demoliciones, picados y desescombro', capitulo: '01. Derribos', importePresupuestado: Math.round(basePpto * 0.10), porcentajeAvance: 100 },
+      { id: 'p2', nombre: 'Tabiquería, trasdosados de pladur y albañilería', capitulo: '02. Albañilería', importePresupuestado: Math.round(basePpto * 0.25), porcentajeAvance: 60 },
+      { id: 'p3', nombre: 'Instalaciones de fontanería, sanitarios y clima', capitulo: '03. Fontanería', importePresupuestado: Math.round(basePpto * 0.20), porcentajeAvance: 40 },
+      { id: 'p4', nombre: 'Instalación eléctrica, cuadro, iluminación y domótica', capitulo: '04. Electricidad', importePresupuestado: Math.round(basePpto * 0.15), porcentajeAvance: 30 },
+      { id: 'p5', nombre: 'Pavimentos porcelánicos, solados y alicatados', capitulo: '05. Revestimientos', importePresupuestado: Math.round(basePpto * 0.18), porcentajeAvance: 0 },
+      { id: 'p6', nombre: 'Carpintería interior, armarios, pintura y remates', capitulo: '06. Acabados', importePresupuestado: Math.round(basePpto * 0.12), porcentajeAvance: 0 }
+    ];
+
+    const avgProgreso = Math.round(plantilla.reduce((sum, p) => sum + p.porcentajeAvance, 0) / plantilla.length);
+    await saveObra({
+      ...obra,
+      partidas: plantilla,
+      progreso: avgProgreso
+    });
+    showToast('Plantilla estándar de 6 partidas cargada');
+  };
+
+  const handleUpdatePartidaAvance = async (partidaId, newAvance) => {
+    const updated = partidasList.map(p => {
+      if (p.id === partidaId) {
+        return { ...p, porcentajeAvance: Math.min(100, Math.max(0, parseInt(newAvance, 10) || 0)) };
+      }
+      return p;
+    });
+
+    const sumPpto = updated.reduce((s, p) => s + (parseFloat(p.importePresupuestado) || 0), 0);
+    const sumCert = updated.reduce((s, p) => s + ((parseFloat(p.importePresupuestado) || 0) * (p.porcentajeAvance / 100)), 0);
+    const avgProgreso = sumPpto > 0 ? Math.round((sumCert / sumPpto) * 100) : 0;
+
+    await saveObra({
+      ...obra,
+      partidas: updated,
+      progreso: avgProgreso
+    });
+  };
+
+  const handleSavePartidaModal = async (e) => {
+    e.preventDefault();
+    if (!editingPartidaModal.nombre) {
+      showToast('Por favor escribe el nombre de la partida', 'error');
+      return;
+    }
+
+    let updated;
+    if (editingPartidaModal.id) {
+      updated = partidasList.map(p => p.id === editingPartidaModal.id ? editingPartidaModal : p);
+    } else {
+      updated = [...partidasList, { ...editingPartidaModal, id: `p-${Date.now()}` }];
+    }
+
+    const sumPpto = updated.reduce((s, p) => s + (parseFloat(p.importePresupuestado) || 0), 0);
+    const sumCert = updated.reduce((s, p) => s + ((parseFloat(p.importePresupuestado) || 0) * ((p.porcentajeAvance || 0) / 100)), 0);
+    const avgProgreso = sumPpto > 0 ? Math.round((sumCert / sumPpto) * 100) : (obra.progreso || 0);
+
+    await saveObra({
+      ...obra,
+      partidas: updated,
+      progreso: avgProgreso
+    });
+    setEditingPartidaModal(null);
+    showToast('Partida guardada correctamente');
+  };
+
+  const handleDeletePartida = async (partidaId) => {
+    if (window.confirm('¿Seguro que deseas eliminar esta partida?')) {
+      const updated = partidasList.filter(p => p.id !== partidaId);
+      await saveObra({
+        ...obra,
+        partidas: updated
+      });
+      showToast('Partida eliminada');
+    }
+  };
 
   const handleCrearParteParaEstaObra = () => {
     setEditingParteId(null);
@@ -322,6 +427,18 @@ export const ObraDetalle = () => {
           Diario de Trabajo ({partesDeObra.length})
         </button>
 
+        <button
+          onClick={() => setActiveSubTab('partidas')}
+          className={`pb-3 border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
+            activeSubTab === 'partidas'
+              ? 'border-brand-600 text-brand-600'
+              : 'border-transparent text-slate-400 hover:text-slate-700'
+          }`}
+        >
+          <ListOrdered className="w-4 h-4" />
+          <span>Partidas y Avance ({partidasList.length})</span>
+        </button>
+
         {userRole === 'admin' && (
           <button
             onClick={() => setActiveSubTab('rentabilidad')}
@@ -414,6 +531,192 @@ export const ObraDetalle = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* 2. Contenido Pestaña Partidas Presupuestarias y Certificaciones */}
+      {activeSubTab === 'partidas' && (
+        <div className="space-y-6">
+          {/* Métricas de Avance Económico Certificado */}
+          <div className="p-5 rounded-3xl bg-slate-900 text-white space-y-4 shadow-md">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <span className="text-xs text-brand-400 uppercase font-bold tracking-wider">Control de Certificación y Avance</span>
+                <h3 className="text-lg font-black text-white mt-0.5">Avance Físico & Financiero</h3>
+                <p className="text-xs text-slate-400">
+                  Calculado en base a {partidasList.length} partidas presupuestarias
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleLoadTemplatePartidas}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-brand-300 font-bold text-xs flex items-center gap-1.5 border border-slate-700 active:scale-95 transition-all"
+                  title="Cargar 6 partidas estándar de reforma (Demoliciones, Albañilería, Fontanería, Electricidad, Pavimentos, Acabados)"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Plantilla Estándar</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setEditingPartidaModal({ nombre: '', capitulo: '01. General', importePresupuestado: '', porcentajeAvance: 0 })}
+                  className="px-3.5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-brand-600/30 active:scale-95 transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Nueva Partida</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-800">
+              <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700/50">
+                <span className="text-[10px] font-bold uppercase text-slate-400">Presupuesto Obra</span>
+                <div className="text-base font-extrabold text-white mt-0.5">{presupuesto.toFixed(0)} €</div>
+              </div>
+
+              <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700/50">
+                <span className="text-[10px] font-bold uppercase text-slate-400">Partidas Asignadas</span>
+                <div className="text-base font-extrabold text-white mt-0.5">{totalPartidasPresupuesto.toFixed(0)} €</div>
+              </div>
+
+              <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700/50">
+                <span className="text-[10px] font-bold uppercase text-emerald-400">Certificado Producido</span>
+                <div className="text-base font-extrabold text-emerald-400 mt-0.5">{totalCertificadoEuros.toFixed(0)} €</div>
+              </div>
+
+              <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700/50">
+                <span className="text-[10px] font-bold uppercase text-brand-300">Avance Ponderado</span>
+                <div className="text-base font-extrabold text-brand-300 mt-0.5">{pctAvanceCertificado}%</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Listado de Partidas */}
+          <div className="space-y-3">
+            {partidasList.map((partida) => {
+              const importe = parseFloat(partida.importePresupuestado) || 0;
+              const avance = parseInt(partida.porcentajeAvance, 10) || 0;
+              const certEuros = (importe * avance) / 100;
+              const isFinished = avance === 100;
+
+              return (
+                <div
+                  key={partida.id}
+                  className={`bg-white rounded-2xl border p-4 shadow-sm transition-all space-y-3 ${
+                    isFinished ? 'border-emerald-200 bg-emerald-50/10' : 'border-slate-200'
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {partida.capitulo && (
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md text-[10px] font-extrabold uppercase">
+                            {partida.capitulo}
+                          </span>
+                        )}
+                        <h4 className="text-sm font-bold text-slate-900">{partida.nombre}</h4>
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Presupuesto: <strong className="text-slate-800">{importe.toFixed(2)} €</strong> • Producido: <strong className="text-emerald-700">{certEuros.toFixed(2)} €</strong>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-auto">
+                      <span className={`px-2.5 py-1 rounded-xl text-xs font-black flex items-center gap-1 ${
+                        isFinished ? 'bg-emerald-100 text-emerald-800' : 'bg-brand-50 text-brand-700'
+                      }`}>
+                        {isFinished ? <Check className="w-3.5 h-3.5" /> : null}
+                        <span>{avance}%</span>
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => setEditingPartidaModal(partida)}
+                        className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                        title="Editar partida"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePartida(partida.id)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="Eliminar partida"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Barra y Selector Rápido de % */}
+                  <div className="space-y-2 pt-1 border-t border-slate-100">
+                    <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-300 rounded-full ${
+                          isFinished ? 'bg-emerald-500' : 'bg-brand-600'
+                        }`}
+                        style={{ width: `${avance}%` }}
+                      ></div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {[0, 25, 50, 75, 100].map((pct) => (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => handleUpdatePartidaAvance(partida.id, pct)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                              avance === pct
+                                ? 'bg-slate-900 text-white shadow-sm'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            {pct}%
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="5"
+                          value={avance}
+                          onChange={(e) => handleUpdatePartidaAvance(partida.id, e.target.value)}
+                          className="w-24 sm:w-32 accent-brand-600 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {partidasList.length === 0 && (
+              <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-slate-200 p-6 space-y-3">
+                <ListOrdered className="w-10 h-10 text-slate-300 mx-auto" />
+                <h4 className="font-bold text-slate-800 text-sm">No hay partidas presupuestarias cargadas</h4>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  Desglosa la obra por capítulos para llevar un control estricto de las certificaciones de avance y el valor producido.
+                </p>
+                <div className="pt-2 flex justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleLoadTemplatePartidas}
+                    className="px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-brand-600/20"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Cargar Plantilla Estándar</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -671,6 +974,98 @@ export const ObraDetalle = () => {
         title={viewerModal.title}
         onClose={() => setViewerModal(prev => ({ ...prev, isOpen: false }))}
       />
+
+      {/* Modal para Crear / Editar Partida Presupuestaria */}
+      {editingPartidaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scale-up">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-base text-slate-900">
+                {editingPartidaModal.id ? 'Editar Partida' : 'Nueva Partida Presupuestaria'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingPartidaModal(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePartidaModal} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Nombre de la Partida</label>
+                <input
+                  type="text"
+                  required
+                  value={editingPartidaModal.nombre || ''}
+                  onChange={(e) => setEditingPartidaModal(prev => ({ ...prev, nombre: e.target.value }))}
+                  placeholder="Ej: Tabiquería de Pladur y Aislamientos"
+                  className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Capítulo / Código</label>
+                  <input
+                    type="text"
+                    value={editingPartidaModal.capitulo || ''}
+                    onChange={(e) => setEditingPartidaModal(prev => ({ ...prev, capitulo: e.target.value }))}
+                    placeholder="Ej: 02. Albañilería"
+                    className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Importe Presupuestado (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={editingPartidaModal.importePresupuestado || ''}
+                    onChange={(e) => setEditingPartidaModal(prev => ({ ...prev, importePresupuestado: e.target.value }))}
+                    placeholder="0.00"
+                    className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs font-bold text-slate-700">Porcentaje de Avance</label>
+                  <span className="text-xs font-black text-brand-600">{editingPartidaModal.porcentajeAvance || 0}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={editingPartidaModal.porcentajeAvance || 0}
+                  onChange={(e) => setEditingPartidaModal(prev => ({ ...prev, porcentajeAvance: parseInt(e.target.value, 10) }))}
+                  className="w-full accent-brand-600"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingPartidaModal(null)}
+                  className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-md shadow-brand-600/20"
+                >
+                  Guardar Partida
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

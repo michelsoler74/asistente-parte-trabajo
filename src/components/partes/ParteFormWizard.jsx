@@ -40,7 +40,8 @@ import {
   MapPin,
   ShieldCheck,
   Navigation,
-  ExternalLink
+  ExternalLink,
+  ListOrdered
 } from 'lucide-react';
 
 const STEPS = [
@@ -675,6 +676,34 @@ export const ParteFormWizard = () => {
                 placeholder="Describe las tareas realizadas (puedes usar el botón de dictar por voz arriba)..."
                 className="w-full p-4 bg-slate-50 border border-slate-300 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-brand-500 focus:bg-white transition-all leading-relaxed"
               />
+
+              {/* Sugerencias de Partidas de la Obra si existen */}
+              {(() => {
+                const obraActual = obras.find(o => o.id === formData.obraId || o.nombre === formData.obraNombre);
+                if (obraActual && obraActual.partidas && obraActual.partidas.length > 0) {
+                  return (
+                    <div className="p-3 bg-brand-50/50 border border-brand-200 rounded-2xl space-y-1.5">
+                      <span className="text-[11px] font-bold text-brand-900 flex items-center gap-1">
+                        <ListOrdered className="w-3.5 h-3.5" />
+                        <span>Partidas asignadas a esta obra (toque para añadir al texto):</span>
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {obraActual.partidas.map(p => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => addQuickTag('trabajosRealizados', `[${p.capitulo || 'Partida'}] ${p.nombre}`)}
+                            className="px-2.5 py-1 rounded-lg bg-white hover:bg-brand-100 text-brand-800 text-xs font-semibold border border-brand-200 shadow-2xs transition-colors"
+                          >
+                            + {p.nombre} ({p.porcentajeAvance || 0}%)
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               <div>
                 <span className="text-[11px] font-semibold text-slate-400 block mb-2">Sugerencias rápidas (+):</span>
