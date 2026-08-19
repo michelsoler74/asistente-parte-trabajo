@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { exportLibroCompletoExcel } from '../../services/excelExportService';
+import { AVAILABLE_FREE_MODELS, testAiConnection } from '../../services/aiService';
 import { 
   Settings, 
   Building2, 
@@ -38,8 +39,13 @@ export const ConfiguracionView = () => {
     telefono: '',
     email: '',
     whatsappEnvio: '',
-    colorPrimario: '#0269c9'
+    colorPrimario: '#0269c9',
+    openRouterApiKey: '',
+    openRouterModel: 'google/gemini-2.0-flash-lite-preview-02-05:free'
   });
+
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [isTestingAi, setIsTestingAi] = useState(false);
 
   useEffect(() => {
     if (empresa) {
@@ -50,6 +56,19 @@ export const ConfiguracionView = () => {
   const handleSubmitEmpresa = async (e) => {
     e.preventDefault();
     await saveEmpresaConfig(formEmpresa);
+    showToast('Configuración guardada correctamente');
+  };
+
+  const handleTestAiConnection = async () => {
+    setIsTestingAi(true);
+    try {
+      await testAiConnection(formEmpresa.openRouterApiKey, formEmpresa.openRouterModel);
+      showToast('¡Conexión exitosa con OpenRouter AI!', 'success');
+    } catch (err) {
+      showToast(err.message || 'Error al conectar con OpenRouter', 'error');
+    } finally {
+      setIsTestingAi(false);
+    }
   };
 
   const handleFileImport = (e) => {
@@ -166,6 +185,107 @@ export const ConfiguracionView = () => {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* 2. SECCIÓN: INTELIGENCIA ARTIFICIAL (OPENROUTER MODELOS FREE) */}
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4 flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-purple-50 text-purple-600">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-slate-900">Inteligencia Artificial (OpenRouter Free)</h3>
+              <p className="text-xs text-slate-500">Redacción técnica profesional de partes y lectura OCR de albaranes por foto</p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-extrabold flex items-center gap-1">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>100% Gratuito</span>
+          </span>
+        </div>
+
+        <div className="space-y-4 text-xs sm:text-sm">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="font-bold text-slate-700">API Key de OpenRouter</label>
+              <a
+                href="https://openrouter.ai/keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-brand-600 font-bold hover:underline text-[11px]"
+              >
+                Obtener Clave Gratis en OpenRouter &rarr;
+              </a>
+            </div>
+            <div className="relative">
+              <input
+                type={showApiKey ? 'text' : 'password'}
+                value={formEmpresa.openRouterApiKey || ''}
+                onChange={(e) => setFormEmpresa(prev => ({ ...prev, openRouterApiKey: e.target.value }))}
+                placeholder="sk-or-v1-..."
+                className="w-full p-3 pr-20 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs focus:ring-2 focus:ring-purple-500"
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiKey(!showApiKey)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1 text-slate-500 hover:text-slate-800 text-xs font-semibold rounded-lg bg-slate-200"
+              >
+                {showApiKey ? 'Ocultar' : 'Ver'}
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Tu clave se almacena de forma segura en tu navegador. Puedes crear una cuenta gratis en OpenRouter en 30 segundos.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Modelo de IA Gratuito</label>
+              <select
+                value={formEmpresa.openRouterModel || 'google/gemini-2.0-flash-lite-preview-02-05:free'}
+                onChange={(e) => setFormEmpresa(prev => ({ ...prev, openRouterModel: e.target.value }))}
+                className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-purple-500"
+              >
+                {AVAILABLE_FREE_MODELS.map(m => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={handleTestAiConnection}
+                disabled={isTestingAi}
+                className="w-full py-3 px-4 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {isTestingAi ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Verificando conexión...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 text-purple-600" />
+                    <span>Probar Conexión IA</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={handleSubmitEmpresa}
+              className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-600/20 active:scale-95 transition-all flex items-center gap-2"
+            >
+              <Save className="w-4 h-4" />
+              <span>Guardar Ajustes de IA</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 2. SECCIÓN: DATOS DE DEMOSTRACIÓN (1 MES, 4 CUADRILLAS, 4 OBRAS) */}

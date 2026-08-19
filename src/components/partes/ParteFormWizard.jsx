@@ -7,6 +7,7 @@ import { shareToWhatsApp, shareToEmail } from '../../services/shareService';
 import { compressImage, formatFileSize } from '../../services/imageCompressionService';
 import { getCurrentGPSLocation } from '../../services/geoService';
 import { generateVerificationStamp } from '../../services/securityStampService';
+import { refinarTextoTecnicoIA, extraerDatosAlbaranIA } from '../../services/aiService';
 import { ImageViewerModal } from '../common/ImageViewerModal';
 import { 
   Building2, 
@@ -41,7 +42,8 @@ import {
   ShieldCheck,
   Navigation,
   ExternalLink,
-  ListOrdered
+  ListOrdered,
+  Wand2
 } from 'lucide-react';
 
 const STEPS = [
@@ -85,6 +87,8 @@ export const ParteFormWizard = () => {
   const [showAddCustomWorker, setShowAddCustomWorker] = useState(false);
   const [isProcessingImages, setIsProcessingImages] = useState(false);
   const [isCapturingGPS, setIsCapturingGPS] = useState(false);
+  const [isRefiningAI, setIsRefiningAI] = useState({ field: null, loading: false });
+  const [isProcessingOcrId, setIsProcessingOcrId] = useState(null);
   const [viewerModal, setViewerModal] = useState({ isOpen: false, images: [], index: 0, title: '' });
 
   useEffect(() => {
@@ -252,6 +256,69 @@ export const ParteFormWizard = () => {
       showToast(err.message || 'No se pudo obtener la ubicación GPS', 'error');
     } finally {
       setIsCapturingGPS(false);
+    }
+  };
+
+  const handleRefinarTextoIA = async (field, tipo = 'trabajos') => {
+    const textoActual = formData[field] || '';
+    if (!textoActual.trim()) {
+      showToast('Escribe o dicta algo de texto primero para que la IA lo refine', 'info');
+      return;
+    }
+
+    setIsRefiningAI({ field, loading: true });
+    showToast('✨ Redactando en terminología técnica con IA...', 'info');
+    try {
+      const textoRefinado = await refinarTextoTecnicoIA({
+        textoBorrador: textoActual,
+        tipo,
+        empresa
+      });
+      setFormData(prev => ({ ...prev, [field]: textoRefinado }));
+      showToast('¡Texto profesional generado con éxito!', 'success');
+    } catch (err) {
+      console.warn('Error refinarTextoIA:', err);
+      showToast(err.message || 'Error al conectar con la IA', 'error');
+    } finally {
+      setIsRefiningAI({ field: null, loading: false });
+    }
+  };
+
+  const handleOcrAlbaranIA = async (alb) => {
+    if (!alb.url) {
+      showToast('El albarán no tiene imagen válida', 'error');
+      return;
+    }
+
+    setIsProcessingOcrId(alb.id);
+    showToast('🔍 Analizando albarán con Visión IA...', 'info');
+    try {
+      const datos = await extraerDatosAlbaranIA({
+        imageBase64: alb.url,
+        empresa
+      });
+
+      setFormData(prev => ({
+        ...prev,
+        albaranes: prev.albaranes.map(a => {
+          if (a.id === alb.id) {
+            return {
+              ...a,
+              proveedor: datos.proveedor || a.proveedor,
+              numero: datos.numero || a.numero,
+              importe: datos.importe > 0 ? datos.importe.toFixed(2) : a.importe,
+              caption: datos.conceptos || a.caption
+            };
+          }
+          return a;
+        })
+      }));
+      showToast(`¡Albarán extraído! (${datos.proveedor || 'OK'} - ${datos.importe || 0}€)`, 'success');
+    } catch (err) {
+      console.warn('Error OCR:', err);
+      showToast(err.message || 'Error al leer el albarán con IA', 'error');
+    } finally {
+      setIsProcessingOcrId(null);
     }
   };
 
@@ -658,15 +725,37 @@ export const ParteFormWizard = () => {
           {/* PASO 2: TRABAJOS REALIZADOS */}
           {currentStep === 2 && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
                   ¿Qué trabajos se han realizado hoy?
                 </label>
-                <VoiceButton
-                  fieldName="trabajosRealizados"
-                  currentValue={formData.trabajosRealizados}
-                  onTranscript={(t) => handleFieldChange('trabajosRealizados', t)}
-                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleRefinarTextoIA('trabajosRealizados', 'trabajos')}
+                    disabled={isRefiningAI.loading}
+                    className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs flex items-center gap-1.5 border border-purple-200 shadow-2xs active:scale-95 transition-all disabled:opacity-50"
+                    title="Transformar texto coloquial en redacción técnica profesional con IA"
+                  >
+                    {isRefiningAI.loading && isRefiningAI.field === 'trabajosRealizados' ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Redactando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 className="w-3.5 h-3.5 text-purple-600" />
+                        <span>✨ Mejorar con IA</span>
+                      </>
+                    )}
+                  </button>
+
+                  <VoiceButton
+                    fieldName="trabajosRealizados"
+                    currentValue={formData.trabajosRealizados}
+                    onTranscript={(t) => handleFieldChange('trabajosRealizados', t)}
+                  />
+                </div>
               </div>
 
               <textarea
@@ -790,15 +879,37 @@ export const ParteFormWizard = () => {
           {currentStep === 4 && (
             <div className="space-y-6">
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <label className="block text-xs font-bold uppercase tracking-wider text-amber-700">
                     ⚠️ Incidencias o Problemas en Obra
                   </label>
-                  <VoiceButton
-                    fieldName="incidencias"
-                    currentValue={formData.incidencias}
-                    onTranscript={(t) => handleFieldChange('incidencias', t)}
-                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleRefinarTextoIA('incidencias', 'incidencias')}
+                      disabled={isRefiningAI.loading}
+                      className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs flex items-center gap-1.5 border border-purple-200 shadow-2xs active:scale-95 transition-all disabled:opacity-50"
+                      title="Redactar aviso formal de incidencia con IA"
+                    >
+                      {isRefiningAI.loading && isRefiningAI.field === 'incidencias' ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Redactando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Wand2 className="w-3.5 h-3.5 text-purple-600" />
+                          <span>✨ Redactar con IA</span>
+                        </>
+                      )}
+                    </button>
+
+                    <VoiceButton
+                      fieldName="incidencias"
+                      currentValue={formData.incidencias}
+                      onTranscript={(t) => handleFieldChange('incidencias', t)}
+                    />
+                  </div>
                 </div>
                 <textarea
                   rows={3}
@@ -1026,6 +1137,27 @@ export const ParteFormWizard = () => {
                           className="w-24 p-1.5 text-xs bg-white border border-slate-300 rounded-lg font-bold text-slate-900 text-right"
                         />
                       </div>
+
+                      {/* Botón OCR con IA */}
+                      <button
+                        type="button"
+                        onClick={() => handleOcrAlbaranIA(alb)}
+                        disabled={isProcessingOcrId === alb.id}
+                        className="w-full py-1 px-2 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 text-[11px] font-bold border border-purple-200 flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 shadow-2xs"
+                        title="Leer automáticamente proveedor, número e importe de la foto con IA"
+                      >
+                        {isProcessingOcrId === alb.id ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            <span>Leyendo datos con IA...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3 h-3 text-purple-600" />
+                            <span>🔍 Auto-Rellenar con IA</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                     <button
                       type="button"
